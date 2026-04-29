@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "$#" -lt 1 ]; then
+    echo "Usage: ahkunix-open script.ahkl" >&2
+    exit 2
+fi
+
+SCRIPT=$1
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ -x "$SELF_DIR/ahkunixd" ]; then
+    AHKUNIXD="$SELF_DIR/ahkunixd"
+elif command -v ahkunixd >/dev/null 2>&1; then
+    AHKUNIXD=$(command -v ahkunixd)
+elif [ -x "/usr/bin/ahkunixd" ]; then
+    AHKUNIXD="/usr/bin/ahkunixd"
+elif [ -x "/usr/local/bin/ahkunixd" ]; then
+    AHKUNIXD="/usr/local/bin/ahkunixd"
+else
+    echo "ahkunixd not found. Run ./scripts/install-local.sh or install the .deb package." >&2
+    exit 1
+fi
+
+if [ "$(id -u)" -eq 0 ]; then
+    exec "$AHKUNIXD" "$SCRIPT"
+fi
+
+exec sudo --preserve-env=DISPLAY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS "$AHKUNIXD" "$SCRIPT"
