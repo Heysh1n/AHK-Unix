@@ -1,3 +1,4 @@
+.gitignore
 build/
 _CPack_Packages/
 Testing/
