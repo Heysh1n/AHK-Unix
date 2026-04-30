@@ -74,7 +74,7 @@ AHK-Linux directly grabs `/dev/input/eventX`. When a hotstring like `hlo` is typ
 
 ### Quick Setup
 ```bash
-git clone [https://github.com/Heysh1n/AHK-Linux.git](https://github.com/Heysh1n/AHK-Linux.git)
+git clone https://github.com/Heysh1n/AHK-Linux.git
 cd AHK-Linux
 make setup
 ```
@@ -105,7 +105,7 @@ sudo apt install ./ahkunix-0.1.0-Linux.deb
 ### 2. Run it
 
 ```bash
-AHK-Linux-open my.ahkl
+ahkunixd-open my.ahkl
 ```
 *(AHK-Linux will prompt for `sudo` to access input devices).*
 
@@ -123,7 +123,7 @@ Open any text field and type `cout`. The trigger will instantly be erased, repla
 sudo AHK-Linuxd script.ahkl
 
 # Specify a physical device manually
-sudo AHK-Linuxd --device /dev/input/event0 script.ahkl
+sudo ahkunixd --device /dev/input/event0 script.ahkl
 ```
 
 ### Finding your device manually
