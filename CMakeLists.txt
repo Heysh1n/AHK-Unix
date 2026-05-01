@@ -23,6 +23,11 @@ add_executable(ahkunixd
     src/StringUtil.cpp
     src/UinputKeyboard.cpp
     src/main.cpp
+    src/commands/TextCommand.cpp
+    src/commands/SendInputCommand.cpp
+    src/commands/SleepCommand.cpp
+    src/commands/IfCommand.cpp
+    src/commands/ScriptParser.cpp
 )
 
 target_include_directories(ahkunixd PRIVATE include)
@@ -94,7 +99,7 @@ install(FILES examples/ads.ahkl
 set(CPACK_PACKAGE_NAME "ahkunix")
 set(CPACK_PACKAGE_VENDOR "AHKUnix")
 set(CPACK_PACKAGE_CONTACT "local")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "0.4.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Linux evdev/uinput hotstring daemon")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "AHKUnix")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libevdev2, sudo, wl-clipboard | xclip | xsel")

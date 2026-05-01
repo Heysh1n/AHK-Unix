@@ -1,8 +1,8 @@
-# ⌨️ AHK-Linux (AHKUnix)
+# ⌨️ AHK UNIX (AHK Linux)
 
-NOT OFFICIAL AutoHotkey-style text expansion and hotstrings for Linux. 
+NOT OFFICIAL AutoHotkey-style text expansion and hotkeys for Linux. 
 
-AHK-Linux reads physical keyboard input via the Linux input subsystem (`evdev`), intercepts triggers from `.ahkl` scripts, and injects text into the active window using `uinput` and native clipboards. It runs below the X11/Wayland display server level.
+AHK Linux reads physical keyboard input via the Linux input subsystem (`evdev`), parses triggers from `.ahkl` scripts, and injects text/keys into the active window using `uinput` + native clipboard backends. It runs strictly below the X11/Wayland display server layer.
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -12,42 +12,47 @@ AHK-Linux reads physical keyboard input via the Linux input subsystem (`evdev`),
 
 ## ⚡ Current State & Capabilities
 
-The daemon is currently focused on text expansion. Advanced hotkeys are in active development.
-
-| Feature | Status | Description / Example |
+| Feature | Status | Description |
 | :--- | :---: | :--- |
-| **Hotstrings** | ✅ YES | Auto-replacing typed triggers (e.g., `hlo` → `Hello World!`). |
-| **Caret Control** | ✅ YES | Moving the cursor left after injection (e.g., `{Left 16}`). |
-| **Modifier Hotkeys** | ❌ WIP | Bindings requiring held keys like `Alt`, `Ctrl`, or `Super`. |
-| **Complex Scripting** | ❌ WIP | Executing shell commands or complex logic via triggers. |
+| **Hotstrings** | ✅ YES | Text trigger replacement (`:*?:hlo::Hello`) |
+| **Hotkeys (NumPad/F-keys)** | ✅ YES | `NumPad1::...`, `F6::...` |
+| **Modifier Hotkeys** | ✅ YES | `Ctrl & NumPad1::...`, `Alt & F1::...` |
+| **SendInput / Sleep / Random** | ✅ YES | Script command blocks supported |
+| **If/Else logic** | ✅ YES | Supported with parser rules |
+| **Caret Control** | ✅ YES | Moving the cursor left after injection (e.g., `{Left 16}`) |
+| **Lint validation** | ✅ YES | `--lint` checks script without grabbing device |
+| **Strict mode** | ✅ YES | `--strict` enforces strict parser policy |
+| **Full AHK compatibility** | ❌ NO | Project is not a full AutoHotkey interpreter |
 
 ---
 
-## 🗺️ Roadmap
+## 🧠 Parser Rules (Important)
 
-The codebase is being prepared to support full AutoHotkey-like functionality natively on Linux. Upcoming features include:
+AHK Linux supports command blocks, but the parser is intentionally strict for stability.
 
-- [ ] **Modifier Keys Parsing:** Tracking the state of `Ctrl` (`^`), `Alt` (`!`), `Shift` (`+`), and `Super` (`#`) via `libevdev` state queries.
-- [ ] **Shell Execution:** Running external commands directly from `.ahkl` triggers (e.g., opening a terminal or browser).
-- [ ] **Dynamic Layout Detection:** Moving away from hardcoded physical key mappings to support arbitrary keyboard layouts dynamically.
-- [ ] **Multi-line Replacements:** Clean syntax for injecting massive multi-line text blocks.
-- [ ] **More abstraction:** Abstractin code for creating ANY script to ANY lines. 
+### If/Else case policy
+Allowed forms:
+- `if / else`
+- `IF / ELSE`
+
+Other case variants:
+- Normal mode: warning + line ignored
+- `--strict` mode: fatal parser error
 
 ---
 
 ## 💥 The Problem
 
-Linux lacks a native, low-level equivalent to AutoHotkey for simple text expansion. Existing solutions either:
-- Rely on X11 (breaks on Wayland)
-- Require bloated GUI frameworks
-- Intercept keys at the wrong level, causing latency or missed strokes
+Linux lacks a native, low-level equivalent to AutoHotkey that works consistently across Wayland/X11/TTY without GUI bloat. Existing solutions either break on Wayland, require heavy frameworks, or intercept keys at the wrong level (causing latency).
 
 ## 🛠️ The Solution
 
-AHK-Linux directly grabs `/dev/input/eventX`. When a hotstring like `hlo` is typed, the daemon:
-1. Erases the trigger via backspaces.
-2. Injects the replacement text using the system clipboard (`Ctrl+V`).
-3. Sends optional tail keystrokes (e.g., `{Left 16}`).
+AHK Linux works below the display server layer:
+1. Grabs keyboard events from `/dev/input/eventX`
+2. Matches the trigger sequence
+3. Erases the trigger via backspaces
+4. Injects replacement through system clipboard + virtual keyboard (`Ctrl+V`)
+5. Applies tail keys (`{Left}`, `{Enter}`, etc.)
 
 ---
 
@@ -55,81 +60,115 @@ AHK-Linux directly grabs `/dev/input/eventX`. When a hotstring like `hlo` is typ
 
 | Feature | Description |
 |---------|-------------|
-| **Low-Level Intercept** | Uses `libevdev` and `uinput`. Works on Wayland, X11, and TTY. |
-| **Hotstring Parsing** | Define triggers and replacements in simple `.ahkl` files. |
-| **Cursor Control** | Supports moving the cursor after expansion (e.g., `{Left N}`). |
-| **Auto-Detect** | Automatically finds the correct keyboard event device. |
-| **Fast Injection** | Bypasses character-by-character typing using native clipboards (`wl-copy`, `xclip`, `xsel`). |
-| **Zero Bloat** | Pure C++20 daemon. |
+| **Low-Level Intercept** | Uses `libevdev` + `uinput`. Works on Wayland, X11, TTY. |
+| **Trigger Formats** | Legacy hotstrings and key-based hotkeys. |
+| **NumPad & Function Keys** | `NumPad0..9`, `F1..F12`, navigation/special keys. |
+| **Key Modifiers** | `Alt`, `Ctrl`, `Shift`, `Meta/Super` combos. |
+| **Tail Key Commands** | `{Left}`, `{Right}`, `{Home}`, `{End}`, `{Delete}`, `{Enter}`, etc. |
+| **Action Blocks** | `SendInput`, `Sleep`, `Random`, `if/else` / `IF/ELSE`. |
+| **Touchpad Safe** | Touchpad/mouse devices are excluded from keyboard autodetect. |
+| **Daemon Isolation** | Detached background process with proper daemonization. |
+| **Fast Injection** | Clipboard-based paste via `wl-copy`, `xclip`, or `xsel`. |
+| **Zero Bloat** | Pure C++20 daemon. No GUI frameworks required. |
 
 ---
 
 ## 📦 Installation
 
 ### Prerequisites
-
-- C++20 compiler & CMake 3.20+
+- C++20 compiler
+- CMake 3.20+
 - `libevdev`
-- Clipboard backend: `wl-clipboard` (Wayland) or `xclip` / `xsel` (X11)
+- Clipboard backend: 
+  - Wayland: `wl-clipboard`
+  - X11: `xclip` or `xsel`
 
 ### Quick Setup
 ```bash
-git clone https://github.com/Heysh1n/AHK-Linux.git
-cd AHK-Linux
+git clone https://github.com/Heysh1n/AHK Linux.git
+cd AHK Linux
 make setup
 ```
 
-This will attempt to install dependencies via your package manager, build the daemon, and install the binaries to `~/.local/bin`.
-
-### Debian / Ubuntu (.deb)
-
+### Build Debian Package
 ```bash
+make clean-artifacts
 make deb
-sudo apt install ./ahkunix-0.1.0-Linux.deb
+sudo apt install ./*.deb
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Create a script (`my.ahkl`)
+### 1. Create script (`my.ahkl`)
 
 ```ahk
-; Basic text replacement
-:?*:hlo::Hello World!
+; Legacy hotstring
+:*?:hlo::Hello World!
 
-; Replacement with cursor shift (cursor lands between the quotes)
-:?*:cout::std::cout << " " << std::endl;{Left 16}
+; Key hotkey
+NumPad9::Quick message{Enter}
+
+; Modifier hotkey
+Ctrl & NumPad1::Control action{Enter}
+
+; Action block
+:*?:weather1::
+SendInput, {Esc}
+Sleep, 300
+Random, variant, 1, 2
+if (variant = 1) {
+    SendInput, Forecast variant one.{Enter}
+} else {
+    SendInput, Forecast variant two.{Enter}
+}
+Return
 ```
 
-### 2. Run it
+### 2. Validate script first (recommended)
 
 ```bash
-ahkunixd-open my.ahkl
+./build/ahkunixd --lint my.ahkl
+./build/ahkunixd --lint --strict my.ahkl
 ```
-*(AHK-Linux will prompt for `sudo` to access input devices).*
 
-### 3. Trigger it
-Open any text field and type `cout`. The trigger will instantly be erased, replaced by `std::cout << " " << std::endl;`, and the cursor will jump 16 characters to the left.
+### 3. Run daemon
 
-> **Note:** AHK-Linux translates triggers to physical keycodes. A trigger on a non-QWERTY layout is evaluated exactly like its physical equivalent on an English QWERTY layout. Keep your active layout in mind.
+```bash
+# Background daemon
+sudo ./build/ahkunixd my.ahkl
+
+# Foreground debugging
+sudo ./build/ahkunixd --no-daemon my.ahkl
+
+# Launcher shortcut
+ahkunix-open my.ahkl
+```
 
 ---
 
 ## 🎯 CLI Reference
 
 ```bash
-# Auto-detect keyboard and run script
-sudo AHK-Linuxd script.ahkl
+# Lint only, no device grab
+./build/ahkunixd --lint script.ahkl
 
-# Specify a physical device manually
+# Lint in strict parser mode
+./build/ahkunixd --lint --strict script.ahkl
+
+# Run in background daemon mode (default)
+sudo ./build/ahkunixd script.ahkl
+
+# Explicit input device
 sudo ahkunixd --device /dev/input/event0 script.ahkl
+
+# Combine options
+sudo ahkunixd --device /dev/input/event0 --no-daemon --strict script.ahkl
 ```
 
 ### Finding your device manually
-
-If auto-detect fails (e.g., grabs the Power Button instead of the keyboard):
-
+If auto-detect fails:
 ```bash
 cat /proc/bus/input/devices | grep -E 'Name=|Handlers=.*kbd'
 ```
@@ -139,36 +178,66 @@ cat /proc/bus/input/devices | grep -E 'Name=|Handlers=.*kbd'
 ## 🏗️ Architecture
 
 ```text
-AHK-Linux/
-├── include/AHK-Linux/     # Public headers
-├── src/                 # Implementation (C++20)
-│   ├── Daemon.cpp       # Main event loop (poll)
-│   ├── EvdevKeyboard.cpp# EVIOCGRAB wrapper
-│   ├── UinputKeyboard.cpp# Virtual key injection
-│   └── Clipboard.cpp    # Native clipboard bindings
-├── scripts/             # Launch & install scripts
-└── examples/            # Example .ahkl files
+AHKUnix/
+├── include/ahkunix/
+│   ├── core headers
+│   └── commands/
+│       ├── Command.hpp
+│       ├── SendInputCommand.hpp
+│       ├── SleepCommand.hpp
+│       ├── IfCommand.hpp
+│       └── ScriptParser.hpp
+├── src/
+│   ├── core runtime
+│   └── commands/
+├── scripts/
+├── examples/
+└── packaging/
 ```
 
-**Data Flow:**
-`Physical Key` → `/dev/input` → `libevdev` → `RingBuffer` → `Hotstring Matcher` → `Clipboard + Ctrl+V` → `Virtual /dev/uinput`
+**Data flow:**
+`Physical Key` → `/dev/input` → `libevdev` → `RingBuffer` → `matcher` → `Clipboard + uinput`
 
 ---
 
 ## 🔨 Development
 
 ```bash
-make help             # Show available targets
-make build            # Compile AHK-Linuxd
-make test             # Run smoke tests
-make clean-full       # Nuke all build artifacts
+make help
+make build
+make test
+make clean-artifacts
+make clean-full
 ```
+
+---
+
+## ⚠️ Limitations
+
+AHK Linux is not a full AutoHotkey interpreter. Not fully supported:
+- Full AHK language semantics & variables
+- Loops (`while`, `for`)
+- Window management APIs & Mouse automation
+- GUI scripting
+- Full `SendMessage` / `Input` behavior parity with Windows AHK
+
+## 🧪 Troubleshooting
+
+**Permission denied on `/dev/input/eventX`**
+Run with `sudo` or configure proper udev permissions.
+
+**no clipboard backend found**
+Install `wl-clipboard`, `xclip`, or `xsel`.
+
+**Script passes normal mode but fails strict mode**
+Check `If/Else` case policy and parser warnings.
 
 ---
 
 ## 📜 License
 
-[MIT](LICENSE) — © 2026 (Heysh1n) AHK-Linux contributors
+[MIT](LICENSE) — © 2026 AutoHotKey Contributors & Heysh1n 
+
 <p align="center">
   Made with ❤️ by Heysh1n
 </p>
