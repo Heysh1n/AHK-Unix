@@ -32,10 +32,15 @@ AHK-Linux directly grabs `/dev/input/eventX`. When a hotstring like `rrd1` is ty
 |---------|-------------|
 | **Low-Level Intercept** | Uses `libevdev` and `uinput`. Works on Wayland, X11, and TTY. |
 | **Hotstring Parsing** | Define triggers and replacements in simple `.ahkl` files. |
-| **Cursor Control** | Supports moving the cursor after expansion (e.g., `{Left N}`). |
+| **NumPad & Function Keys** | Press NumPad0-9, F1-F12, and special keys as hotkey triggers. |
+| **Key Modifiers** | Combine Alt, Ctrl, Shift, Meta with any key (e.g., `Ctrl & NumPad1::action`). |
+| **Extended Cursor Control** | Move/delete with `{Left}`, `{Right}`, `{Home}`, `{End}`, `{Delete}`, etc. |
+| **Cursor Positioning** | After text expansion, cursor moves to specified location. |
 | **Auto-Detect** | Automatically finds the correct keyboard event device. |
+| **Touchpad Safe** | Modern detection skips Touchpad/Mouse devices—your trackpad won't be affected. |
+| **Background Daemon** | Runs as isolated background process independent of parent sessions. |
 | **Fast Injection** | Bypasses character-by-character typing using native clipboards (`wl-copy`, `xclip`, `xsel`). |
-| **Zero Bloat** | Pure C++20 daemon. |
+| **Zero Bloat** | Pure C++20 daemon. No GUI frameworks required. |
 
 ---
 
@@ -91,12 +96,22 @@ Open any text field and type `rrd1`. It will instantly be replaced.
 ## 🎯 CLI Reference
 
 ```bash
-# Auto-detect keyboard and run script
+# Auto-detect keyboard and run as background daemon
 sudo AHK-Linuxd script.ahkl
+
+# Run in foreground (for debugging)
+sudo AHK-Linuxd --no-daemon script.ahkl
 
 # Specify a physical device manually
 sudo AHK-Linuxd --device /dev/input/event0 script.ahkl
+
+# Combine options
+sudo AHK-Linuxd --device /dev/input/event0 --no-daemon script.ahkl
 ```
+
+### Options
+- `--device PATH` - Use specific keyboard device instead of auto-detect
+- `--no-daemon` - Run in foreground process (useful for debugging/testing)
 
 ### Finding your device manually
 

@@ -23,6 +23,11 @@ add_executable(ahkunixd
     src/StringUtil.cpp
     src/UinputKeyboard.cpp
     src/main.cpp
+    src/commands/TextCommand.cpp
+    src/commands/SendInputCommand.cpp
+    src/commands/SleepCommand.cpp
+    src/commands/IfCommand.cpp
+    src/commands/ScriptParser.cpp
 )
 
 target_include_directories(ahkunixd PRIVATE include)
