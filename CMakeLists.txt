@@ -99,7 +99,7 @@ install(FILES examples/ads.ahkl
 set(CPACK_PACKAGE_NAME "ahkunix")
 set(CPACK_PACKAGE_VENDOR "AHKUnix")
 set(CPACK_PACKAGE_CONTACT "local")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "0.4.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Linux evdev/uinput hotstring daemon")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "AHKUnix")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libevdev2, sudo, wl-clipboard | xclip | xsel")
