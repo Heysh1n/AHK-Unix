@@ -146,7 +146,7 @@ namespace ahkunix::daemon
             throw errno_error("bind");
         }
 
-        if (::chmod(path.c_str(), 0600) < 0)
+        if (::chmod(path.c_str(), 0666) < 0) 
         {
             throw errno_error("chmod");
         }

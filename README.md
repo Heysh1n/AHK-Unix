@@ -2,7 +2,9 @@
 
 NOT OFFICIAL AutoHotkey-style text expansion and hotkeys for Linux. 
 
-AHK Linux reads physical keyboard input via the Linux input subsystem (`evdev`), parses triggers from `.ahkl` scripts, and injects text/keys into the active window using `uinput` + native clipboard backends. It runs strictly below the X11/Wayland display server layer.
+AHKUnix reads physical keyboard input via the Linux input subsystem (`evdev`), parses triggers from `.ahkl` scripts, and injects text/keys into the active window using `uinput` + native clipboard backends. 
+
+With version **0.5.0**, it runs as a robust Client-Server architecture (Daemon + CLI Controller) strictly below the X11/Wayland display server layer.
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -18,17 +20,20 @@ AHK Linux reads physical keyboard input via the Linux input subsystem (`evdev`),
 | **Hotkeys (NumPad/F-keys)** | ✅ YES | `NumPad1::...`, `F6::...` |
 | **Modifier Hotkeys** | ✅ YES | `Ctrl & NumPad1::...`, `Alt & F1::...` |
 | **SendInput / Sleep / Random** | ✅ YES | Script command blocks supported |
-| **If/Else logic** | ✅ YES | Supported with parser rules |
 | **Caret Control** | ✅ YES | Moving the cursor left after injection (e.g., `{Left 16}`) |
-| **Lint validation** | ✅ YES | `--lint` checks script without grabbing device |
-| **Strict mode** | ✅ YES | `--strict` enforces strict parser policy |
+| **Hot-Reloading** | ✅ YES | Reload scripts via IPC socket without ungrabbing device |
+| **Clipboard Safety** | ✅ YES | Saves and restores user's clipboard state during text injection |
 | **Full AHK compatibility** | ❌ NO | Project is not a full AutoHotkey interpreter |
 
 ---
 
 ## 🧠 Parser Rules (Important)
 
-AHK Linux supports command blocks, but the parser is intentionally strict for stability.
+AHKUnix supports command blocks, but the parser is intentionally strict for stability.
+
+### Supported Comments
+- Single-line: `;` or `#`
+- Multi-line block: `/* ... */`
 
 ### If/Else case policy
 Allowed forms:
@@ -43,16 +48,13 @@ Other case variants:
 
 ## 💥 The Problem
 
-Linux lacks a native, low-level equivalent to AutoHotkey that works consistently across Wayland/X11/TTY without GUI bloat. Existing solutions either break on Wayland, require heavy frameworks, or intercept keys at the wrong level (causing latency).
+Linux lacks a native, low-level equivalent to AutoHotkey that works consistently across Wayland/X11/TTY without GUI bloat. Existing solutions either break on Wayland, require heavy frameworks, or intercept keys at the wrong level (causing latency). Furthermore, running a monolithic key-grabber risks killing your keyboard input if the parent terminal is closed.
 
-## 🛠️ The Solution
+## 🛠️ The Solution (Client-Server Architecture)
 
-AHK Linux works below the display server layer:
-1. Grabs keyboard events from `/dev/input/eventX`
-2. Matches the trigger sequence
-3. Erases the trigger via backspaces
-4. Injects replacement through system clipboard + virtual keyboard (`Ctrl+V`)
-5. Applies tail keys (`{Left}`, `{Enter}`, etc.)
+AHKUnix is split into two parts communicating via a Unix Domain Socket (`/tmp/ahkunix.sock`):
+1. **`ahkunixd` (Daemon):** Grabs `/dev/input/eventX` exclusively, runs completely in the background, parses scripts, and injects text.
+2. **`ahkunixctl` (Client):** A lightweight CLI tool to send commands (Load, Stop, Ping) to the daemon safely.
 
 ---
 
@@ -62,14 +64,12 @@ AHK Linux works below the display server layer:
 |---------|-------------|
 | **Low-Level Intercept** | Uses `libevdev` + `uinput`. Works on Wayland, X11, TTY. |
 | **Trigger Formats** | Legacy hotstrings and key-based hotkeys. |
-| **NumPad & Function Keys** | `NumPad0..9`, `F1..F12`, navigation/special keys. |
 | **Key Modifiers** | `Alt`, `Ctrl`, `Shift`, `Meta/Super` combos. |
 | **Tail Key Commands** | `{Left}`, `{Right}`, `{Home}`, `{End}`, `{Delete}`, `{Enter}`, etc. |
-| **Action Blocks** | `SendInput`, `Sleep`, `Random`, `if/else` / `IF/ELSE`. |
 | **Touchpad Safe** | Touchpad/mouse devices are excluded from keyboard autodetect. |
-| **Daemon Isolation** | Detached background process with proper daemonization. |
-| **Fast Injection** | Clipboard-based paste via `wl-copy`, `xclip`, or `xsel`. |
-| **Zero Bloat** | Pure C++20 daemon. No GUI frameworks required. |
+| **Daemon Isolation** | Double-fork detached background process. Survives terminal closure. |
+| **Clipboard Preservation**| Temporarily stores your clipboard, injects via `wl-copy`/`xclip`, and restores your data. |
+| **Zero Bloat** | Pure C++20. No GUI frameworks required. |
 
 ---
 
@@ -85,8 +85,8 @@ AHK Linux works below the display server layer:
 
 ### Quick Setup
 ```bash
-git clone https://github.com/Heysh1n/AHK Linux.git
-cd AHK Linux
+git clone [https://github.com/Heysh1n/AHKUnix.git](https://github.com/Heysh1n/AHKUnix.git)
+cd AHKUnix
 make setup
 ```
 
@@ -104,16 +104,12 @@ sudo apt install ./*.deb
 ### 1. Create script (`my.ahkl`)
 
 ```ahk
-; Legacy hotstring
+/* My first AHKUnix script
+*/
 :*?:hlo::Hello World!
 
-; Key hotkey
-NumPad9::Quick message{Enter}
-
-; Modifier hotkey
 Ctrl & NumPad1::Control action{Enter}
 
-; Action block
 :*?:weather1::
 SendInput, {Esc}
 Sleep, 300
@@ -126,49 +122,50 @@ if (variant = 1) {
 Return
 ```
 
-### 2. Validate script first (recommended)
+### 2. Validate script first
 
+Use the client to lint the script locally (does not require sudo or running daemon):
 ```bash
-./build/ahkunixd --lint my.ahkl
-./build/ahkunixd --lint --strict my.ahkl
+ahkunixctl lint my.ahkl
+ahkunixctl lint --strict my.ahkl
 ```
 
-### 3. Run daemon
+### 3. Run the Daemon
 
 ```bash
-# Background daemon
-sudo ./build/ahkunixd my.ahkl
+# Start the server in the background
+sudo ahkunixd my.ahkl
+```
 
-# Foreground debugging
-sudo ./build/ahkunixd --no-daemon my.ahkl
+### 4. Control the Daemon via Client
 
-# Launcher shortcut
-ahkunix-open my.ahkl
+```bash
+# Check if daemon is alive
+ahkunixctl ping
+
+# Hot-reload a different script without losing keyboard grab
+ahkunixctl load /absolute/path/to/another.ahkl
+
+# Safely stop the daemon and ungrab the keyboard
+ahkunixctl stop
 ```
 
 ---
 
-## 🎯 CLI Reference
+## 🎯 Daemon (`ahkunixd`) CLI Reference
 
-```bash
-# Lint only, no device grab
-./build/ahkunixd --lint script.ahkl
-
-# Lint in strict parser mode
-./build/ahkunixd --lint --strict script.ahkl
-
+```bashw
 # Run in background daemon mode (default)
-sudo ./build/ahkunixd script.ahkl
+sudo ahkunixd script.ahkl
+
+# Run in foreground (for debugging/logs)
+sudo ahkunixd --foreground script.ahkl
 
 # Explicit input device
 sudo ahkunixd --device /dev/input/event0 script.ahkl
-
-# Combine options
-sudo ahkunixd --device /dev/input/event0 --no-daemon --strict script.ahkl
 ```
 
-### Finding your device manually
-If auto-detect fails:
+If auto-detect fails, find your device manually:
 ```bash
 cat /proc/bus/input/devices | grep -E 'Name=|Handlers=.*kbd'
 ```
@@ -180,57 +177,38 @@ cat /proc/bus/input/devices | grep -E 'Name=|Handlers=.*kbd'
 ```text
 AHKUnix/
 ├── include/ahkunix/
-│   ├── core headers
-│   └── commands/
-│       ├── Command.hpp
-│       ├── SendInputCommand.hpp
-│       ├── SleepCommand.hpp
-│       ├── IfCommand.hpp
-│       └── ScriptParser.hpp
+│   ├── core/      (Parser, Commands, Clipboard)
+│   └── daemon/    (IpcServer, Daemonizer)
 ├── src/
-│   ├── core runtime
-│   └── commands/
+│   ├── daemon/    (ahkunixd server)
+│   ├── cli/       (ahkunixctl client)
+│   └── commands/  (AST Execution)
 ├── scripts/
 ├── examples/
 └── packaging/
-```
-
-**Data flow:**
-`Physical Key` → `/dev/input` → `libevdev` → `RingBuffer` → `matcher` → `Clipboard + uinput`
-
----
-
-## 🔨 Development
-
-```bash
-make help
-make build
-make test
-make clean-artifacts
-make clean-full
 ```
 
 ---
 
 ## ⚠️ Limitations
 
-AHK Linux is not a full AutoHotkey interpreter. Not fully supported:
-- Full AHK language semantics & variables
+AHKUnix is not a full AutoHotkey interpreter. Not fully supported:
+- Full AHK language semantics & variables (only basic variables)
 - Loops (`while`, `for`)
 - Window management APIs & Mouse automation
 - GUI scripting
-- Full `SendMessage` / `Input` behavior parity with Windows AHK
+- `SendMessage` / `Input` commands
 
 ## 🧪 Troubleshooting
 
+**fatal: connect /tmp/ahkunix.sock: Permission denied**
+The daemon is running as `root`, so the socket is restricted. Run `ahkunixctl` with `sudo`, or configure proper udev rules and run both as a standard user.
+
 **Permission denied on `/dev/input/eventX`**
-Run with `sudo` or configure proper udev permissions.
+Run `ahkunixd` with `sudo` or configure proper udev group permissions for the `input` group.
 
 **no clipboard backend found**
 Install `wl-clipboard`, `xclip`, or `xsel`.
-
-**Script passes normal mode but fails strict mode**
-Check `If/Else` case policy and parser warnings.
 
 ---
 
