@@ -14,10 +14,13 @@ namespace ahk
 
         void TextCommand::execute(UinputKeyboard &injector, Clipboard &clipboard) const
         {
+            const std::string old_clipboard = clipboard.get_text();
             clipboard.set_text(text_);
             std::this_thread::sleep_for(std::chrono::milliseconds(30));
             injector.hold_combo_and_tap({KEY_LEFTCTRL}, KEY_V);
             std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            clipboard.set_text(old_clipboard);
         }
 
         std::string TextCommand::describe() const

@@ -1,9 +1,14 @@
+#include "ahkunix/AhkParser.hpp"
+#include "ahkunix/Fd.hpp"
+#include "ahkunix/LayoutProfile.hpp"
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -23,22 +28,9 @@ namespace
         std::cerr
             << "Usage:\n"
             << "  " << argv0 << " ping\n"
-            << "  " << argv0 << " stop\n";
-    }
-
-    std::string to_daemon_command(std::string command)
-    {
-        if (command == "ping" || command == "PING")
-        {
-            return "PING\n";
-        }
-
-        if (command == "stop" || command == "STOP")
-        {
-            return "STOP\n";
-        }
-
-        throw std::runtime_error("unknown command: " + command);
+            << "  " << argv0 << " stop\n"
+            << "  " << argv0 << " load script.ahkl\n"
+            << "  " << argv0 << " lint [--strict] script.ahkl\n";
     }
 
     void write_all(int fd, const std::string &message)
@@ -118,27 +110,119 @@ namespace
 
         return fd;
     }
+
+    bool response_is_error(const std::string &response)
+    {
+        return response.starts_with("ERR");
+    }
+
+    int send_daemon_command(const std::string &command)
+    {
+        ahk::Fd fd(connect_to_daemon());
+
+        write_all(fd.get(), command);
+        const std::string response = read_response(fd.get());
+
+        if (response_is_error(response))
+        {
+            std::cerr << response;
+            return 1;
+        }
+
+        std::cout << response;
+        return 0;
+    }
+
+    int run_lint(int argc, char **argv)
+    {
+        bool strict_mode = false;
+        std::filesystem::path script;
+
+        for (int i = 2; i < argc; ++i)
+        {
+            const std::string arg(argv[i]);
+            if (arg == "--strict")
+            {
+                strict_mode = true;
+                continue;
+            }
+
+            if (arg.starts_with("--"))
+            {
+                throw std::runtime_error("unknown lint option: " + arg);
+            }
+
+            if (!script.empty())
+            {
+                throw std::runtime_error("multiple script paths provided");
+            }
+
+            script = arg;
+        }
+
+        if (script.empty())
+        {
+            throw std::runtime_error("lint requires a script path");
+        }
+
+        const auto layout = ahk::LayoutProfile::russian_qwerty();
+        (void)ahk::AhkParser::parse_file(script, layout, strict_mode);
+        std::cout << "Lint OK\n";
+        return 0;
+    }
 } // namespace
 
 int main(int argc, char **argv)
 {
     try
     {
-        if (argc != 2)
+        if (argc < 2)
         {
             print_usage(argv[0]);
             return 2;
         }
 
-        const std::string command = to_daemon_command(argv[1]);
-        const int fd = connect_to_daemon();
+        const std::string command = argv[1];
 
-        write_all(fd, command);
-        const std::string response = read_response(fd);
-        ::close(fd);
+        if (command == "ping")
+        {
+            if (argc != 2)
+            {
+                print_usage(argv[0]);
+                return 2;
+            }
+            return send_daemon_command("PING\n");
+        }
 
-        std::cout << response;
-        return 0;
+        if (command == "stop")
+        {
+            if (argc != 2)
+            {
+                print_usage(argv[0]);
+                return 2;
+            }
+            return send_daemon_command("STOP\n");
+        }
+
+        if (command == "load")
+        {
+            if (argc != 3)
+            {
+                print_usage(argv[0]);
+                return 2;
+            }
+
+            const std::filesystem::path script = std::filesystem::absolute(argv[2]);
+            return send_daemon_command("LOAD " + script.string() + "\n");
+        }
+
+        if (command == "lint")
+        {
+            return run_lint(argc, argv);
+        }
+
+        print_usage(argv[0]);
+        return 2;
     }
     catch (const std::exception &e)
     {

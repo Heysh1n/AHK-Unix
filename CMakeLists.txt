@@ -70,6 +70,11 @@ add_executable(ahkunixctl
     src/cli/main.cpp
 )
 
+target_link_libraries(ahkunixctl
+    PRIVATE
+        ahkunix_core
+)
+
 target_compile_options(ahkunixctl PRIVATE
     -Wall
     -Wextra

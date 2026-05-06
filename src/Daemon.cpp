@@ -1,6 +1,8 @@
 #include "ahkunix/Daemon.hpp"
 
+#include "ahkunix/AhkParser.hpp"
 #include "ahkunix/Errors.hpp"
+#include "ahkunix/LayoutProfile.hpp"
 #include "ahkunix/Signals.hpp"
 #include "ahkunix/commands/IfCommand.hpp"
 
@@ -11,6 +13,7 @@
 #include <cerrno>
 #include <chrono>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <utility>
 
@@ -26,13 +29,34 @@ namespace ahk
           ring_(ring_capacity(hotstrings)),
           hotstrings_(std::move(hotstrings)) {}
 
+    void Daemon::reload_script(const std::filesystem::path &path, bool strict_mode)
+    {
+        const auto layout = LayoutProfile::russian_qwerty();
+        auto hotstrings = AhkParser::parse_file(path, layout, strict_mode);
+        RingBuffer new_ring(ring_capacity(hotstrings));
+
+        {
+            std::lock_guard lock(mutex_);
+            hotstrings_ = std::move(hotstrings);
+            ring_ = std::move(new_ring);
+            pressed_keys_.clear();
+        }
+
+        std::cerr << "Reloaded script: " << path << '\n';
+    }
+
     void Daemon::run()
     {
         std::cerr << "Input: " << physical_.name() << "\n";
 
         physical_.grab();
         std::cerr << "Grabbed. Transparent forwarding enabled.\n";
-        std::cerr << "Loaded hotstrings: " << hotstrings_.size() << "\n";
+        std::size_t loaded_hotstrings = 0;
+        {
+            std::lock_guard lock(mutex_);
+            loaded_hotstrings = hotstrings_.size();
+        }
+        std::cerr << "Loaded hotstrings: " << loaded_hotstrings << "\n";
 
         while (!g_stop)
         {
@@ -70,25 +94,34 @@ namespace ahk
     {
         injector_.forward(ev);
 
-        // Track modifier key presses/releases
-        if (ev.type == EV_KEY)
         {
-            if (ev.code == KEY_LEFTCTRL || ev.code == KEY_RIGHTCTRL ||
-                ev.code == KEY_LEFTALT || ev.code == KEY_RIGHTALT ||
-                ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT ||
-                ev.code == KEY_LEFTMETA || ev.code == KEY_RIGHTMETA)
-            {
+            std::lock_guard lock(mutex_);
 
-                if (ev.value == 1)
+            // Track modifier key presses/releases
+            if (ev.type == EV_KEY)
+            {
+                if (ev.code == KEY_LEFTCTRL || ev.code == KEY_RIGHTCTRL ||
+                    ev.code == KEY_LEFTALT || ev.code == KEY_RIGHTALT ||
+                    ev.code == KEY_LEFTSHIFT || ev.code == KEY_RIGHTSHIFT ||
+                    ev.code == KEY_LEFTMETA || ev.code == KEY_RIGHTMETA)
                 {
-                    // Key pressed
-                    pressed_keys_.insert(ev.code);
+
+                    if (ev.value == 1)
+                    {
+                        // Key pressed
+                        pressed_keys_.insert(ev.code);
+                    }
+                    else if (ev.value == 0)
+                    {
+                        // Key released
+                        pressed_keys_.erase(ev.code);
+                    }
                 }
-                else if (ev.value == 0)
-                {
-                    // Key released
-                    pressed_keys_.erase(ev.code);
-                }
+            }
+
+            if (ev.type == EV_KEY && ev.value == 1)
+            {
+                ring_.push(ev.code);
             }
         }
 
@@ -97,14 +130,14 @@ namespace ahk
             return;
         }
 
-        ring_.push(ev.code);
-        const Hotstring *matched = find_match();
+        auto matched = find_match();
         if (!matched)
         {
             return;
         }
 
-        if (matched->erase_trigger){
+        if (matched->erase_trigger)
+        {
             injector_.backspace(matched->trigger_keys.size());
         }
 
@@ -140,12 +173,17 @@ namespace ahk
             }
         }
 
-        ring_.clear();
+        {
+            std::lock_guard lock(mutex_);
+            ring_.clear();
+        }
     }
 
-    const Hotstring *Daemon::find_match() const
+    std::optional<Hotstring> Daemon::find_match() const
     {
         const Hotstring *best = nullptr;
+
+        std::lock_guard lock(mutex_);
         for (const auto &hotstring : hotstrings_)
         {
             if (!ring_.ends_with(hotstring.trigger_keys))
@@ -201,7 +239,18 @@ namespace ahk
                 best = &hotstring;
             }
         }
-        return best;
+
+        if (!best)
+        {
+            return std::nullopt;
+        }
+
+        if (!best->commands.empty() && !best->context)
+        {
+            best->context = std::make_shared<cmd::Context>();
+        }
+
+        return *best;
     }
 
     std::size_t Daemon::ring_capacity(const std::vector<Hotstring> &hotstrings)

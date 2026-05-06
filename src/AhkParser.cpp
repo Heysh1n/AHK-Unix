@@ -243,10 +243,26 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
 
     
     std::vector<Hotstring> hotstrings;
+    bool in_multiline_comment = false;
 
     for (std::size_t i = 0; i < raw_lines.size(); ++i)
     {
         std::string line = trim(raw_lines[i]);
+        if (in_multiline_comment)
+        {
+            if (line.find("*/") != std::string::npos)
+            {
+                in_multiline_comment = false;
+            }
+            continue;
+        }
+
+        if (line == "/*" || line.starts_with("/*"))
+        {
+            in_multiline_comment = line.find("*/", 2) == std::string::npos;
+            continue;
+        }
+
         if (is_comment_or_empty(line))
         {
             continue;

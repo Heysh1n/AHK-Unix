@@ -7,7 +7,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <array>
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 
@@ -32,6 +34,25 @@ void Clipboard::set_text(const std::string& text) const {
     }
 
     throw std::runtime_error("no clipboard backend found: install wl-clipboard, xclip, or xsel");
+}
+
+std::string Clipboard::get_text() const {
+    if (command_exists("wl-copy") && has_env("WAYLAND_DISPLAY")) {
+        if (!command_exists("wl-paste")) {
+            return {};
+        }
+        return read_stdout("wl-paste --no-newline 2>/dev/null");
+    }
+
+    if (command_exists("xclip") && has_env("DISPLAY")) {
+        return read_stdout("xclip -o -selection clipboard 2>/dev/null");
+    }
+
+    if (command_exists("xsel") && has_env("DISPLAY")) {
+        return read_stdout("xsel --clipboard --output 2>/dev/null");
+    }
+
+    return {};
 }
 
 bool Clipboard::has_env(const char* name) {
@@ -60,6 +81,43 @@ bool Clipboard::command_exists(const char* name) {
         start = end + 1;
     }
     return false;
+}
+
+std::string Clipboard::read_stdout(const char* command) {
+    FILE* pipe = ::popen(command, "r");
+    if (!pipe) {
+        return {};
+    }
+
+    std::string output;
+    std::array<char, 4096> buffer {};
+
+    while (true) {
+        errno = 0;
+        const std::size_t bytes = ::fread(buffer.data(), 1, buffer.size(), pipe);
+        if (bytes > 0) {
+            output.append(buffer.data(), bytes);
+        }
+
+        if (bytes == buffer.size()) {
+            continue;
+        }
+
+        if (::feof(pipe)) {
+            break;
+        }
+
+        if (::ferror(pipe)) {
+            if (errno == EINTR) {
+                ::clearerr(pipe);
+                continue;
+            }
+            break;
+        }
+    }
+
+    (void)::pclose(pipe);
+    return output;
 }
 
 void Clipboard::run_with_stdin(const std::vector<std::string>& args, const std::string& input) {

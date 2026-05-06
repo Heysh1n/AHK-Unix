@@ -24,6 +24,30 @@ namespace
         return std::system_error(errno, std::generic_category(), what);
     }
 
+    std::string trim_copy(const std::string &text)
+    {
+        const auto is_space = [](unsigned char ch) {
+            return std::isspace(ch) != 0;
+        };
+
+        const auto first = std::find_if_not(text.begin(), text.end(), is_space);
+        const auto last = std::find_if_not(text.rbegin(), text.rend(), is_space).base();
+
+        if (first >= last)
+        {
+            return {};
+        }
+
+        return {first, last};
+    }
+
+    std::string single_line_error(std::string message)
+    {
+        std::replace(message.begin(), message.end(), '\n', ' ');
+        std::replace(message.begin(), message.end(), '\r', ' ');
+        return message;
+    }
+
     void close_fd(int &fd) noexcept
     {
         if (fd >= 0)
@@ -47,7 +71,7 @@ namespace ahkunix::daemon
         stop();
     }
 
-    void IpcServer::start(StopCallback on_stop)
+    void IpcServer::start(StopCallback on_stop, LoadCallback on_load)
     {
         bool expected = false;
         if (!running_.compare_exchange_strong(expected, true))
@@ -56,6 +80,7 @@ namespace ahkunix::daemon
         }
 
         on_stop_ = std::move(on_stop);
+        on_load_ = std::move(on_load);
 
         try
         {
@@ -234,6 +259,38 @@ namespace ahkunix::daemon
                 return;
             }
 
+            if (command.size() >= 5 && command.starts_with("LOAD") &&
+                std::isspace(static_cast<unsigned char>(command[4])) != 0)
+            {
+                const std::string path = trim_copy(command.substr(4));
+                if (path.empty())
+                {
+                    send_response(client_fd, "ERR LOAD requires path\n");
+                    return;
+                }
+
+                if (!on_load_)
+                {
+                    send_response(client_fd, "ERR LOAD unavailable\n");
+                    return;
+                }
+
+                try
+                {
+                    on_load_(path);
+                    send_response(client_fd, "OK loaded\n");
+                }
+                catch (const std::exception &e)
+                {
+                    send_response(client_fd, "ERR " + single_line_error(e.what()) + "\n");
+                }
+                catch (...)
+                {
+                    send_response(client_fd, "ERR unknown load failure\n");
+                }
+                return;
+            }
+
             send_response(client_fd, "ERR unknown command\n");
         }
         catch (const std::exception &e)
@@ -379,7 +436,8 @@ namespace ahkunix::daemon
         }
 
         std::string normalized(first, last);
-        std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+        const auto verb_end = std::find_if(normalized.begin(), normalized.end(), is_space);
+        std::transform(normalized.begin(), verb_end, normalized.begin(),
                        [](unsigned char ch) {
                            return static_cast<char>(std::toupper(ch));
                        });

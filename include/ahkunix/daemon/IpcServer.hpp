@@ -13,6 +13,7 @@ namespace ahkunix::daemon
     {
     public:
         using StopCallback = std::function<void()>;
+        using LoadCallback = std::function<void(std::string)>;
 
         static constexpr const char *default_socket_path = "/tmp/ahkunix.sock";
 
@@ -22,7 +23,7 @@ namespace ahkunix::daemon
         IpcServer(const IpcServer &) = delete;
         IpcServer &operator=(const IpcServer &) = delete;
 
-        void start(StopCallback on_stop);
+        void start(StopCallback on_stop, LoadCallback on_load);
         void stop() noexcept;
 
         bool running() const noexcept;
@@ -41,6 +42,7 @@ namespace ahkunix::daemon
 
         std::filesystem::path socket_path_;
         StopCallback on_stop_;
+        LoadCallback on_load_;
         std::thread worker_;
         std::atomic_bool running_{false};
         int listen_fd_{-1};
