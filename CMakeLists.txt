@@ -1,15 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ahkunixd LANGUAGES CXX)
+project(AHKUnix VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
 pkg_check_modules(LIBEVDEV REQUIRED IMPORTED_TARGET libevdev)
 
-add_executable(ahkunixd
+set(AHKUNIX_CORE_SOURCES
     src/AhkParser.cpp
     src/Clipboard.cpp
     src/Daemon.cpp
@@ -22,7 +23,6 @@ add_executable(ahkunixd
     src/Signals.cpp
     src/StringUtil.cpp
     src/UinputKeyboard.cpp
-    src/main.cpp
     src/commands/TextCommand.cpp
     src/commands/SendInputCommand.cpp
     src/commands/SleepCommand.cpp
@@ -30,10 +30,47 @@ add_executable(ahkunixd
     src/commands/ScriptParser.cpp
 )
 
-target_include_directories(ahkunixd PRIVATE include)
-target_link_libraries(ahkunixd PRIVATE PkgConfig::LIBEVDEV)
+add_library(ahkunix_core STATIC ${AHKUNIX_CORE_SOURCES})
+
+target_include_directories(ahkunix_core
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
+target_link_libraries(ahkunix_core
+    PUBLIC
+        PkgConfig::LIBEVDEV
+)
+
+target_compile_options(ahkunix_core PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+add_executable(ahkunixd
+    src/daemon/main.cpp
+    src/daemon/Daemonizer.cpp
+    src/daemon/IpcServer.cpp
+)
+
+target_link_libraries(ahkunixd
+    PRIVATE
+        ahkunix_core
+        Threads::Threads
+)
 
 target_compile_options(ahkunixd PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+add_executable(ahkunixctl
+    src/cli/main.cpp
+)
+
+target_compile_options(ahkunixctl PRIVATE
     -Wall
     -Wextra
     -Wpedantic
@@ -42,17 +79,17 @@ target_compile_options(ahkunixd PRIVATE
 enable_testing()
 
 add_test(NAME cli_usage
-    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_usage.sh" "$<TARGET_FILE:ahkunixd>"
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_usage.sh" "$<TARGET_FILE:ahkunixctl>"
 )
 
 add_custom_target(dev
-    DEPENDS ahkunixd
+    DEPENDS ahkunixd ahkunixctl
     COMMENT "Build AHKUnix for local development"
 )
 
 add_custom_target(install-local
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/scripts/install-local.sh" --no-build
-    DEPENDS ahkunixd
+    DEPENDS ahkunixd ahkunixctl
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Install AHKUnix into ~/.local"
 )
@@ -65,13 +102,13 @@ add_custom_target(setup
 
 add_custom_target(package-deb
     COMMAND "${CMAKE_CPACK_COMMAND}" -G DEB --config "${CMAKE_BINARY_DIR}/CPackConfig.cmake"
-    DEPENDS ahkunixd
+    DEPENDS ahkunixd ahkunixctl
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Build Debian package"
 )
 
 add_custom_target(clean-artifacts
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/ahkunix-0.1.0-Linux.deb"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${CMAKE_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/ahkunix-${PROJECT_VERSION}-Linux.deb"
     COMMENT "Remove build directory and generated packages"
 )
 
@@ -81,7 +118,7 @@ add_custom_target(clean-full
     COMMENT "Remove all generated and temporary files for a fresh build"
 )
 
-install(TARGETS ahkunixd RUNTIME DESTINATION bin)
+install(TARGETS ahkunixd ahkunixctl RUNTIME DESTINATION bin)
 install(PROGRAMS scripts/ahkunix-open DESTINATION bin)
 install(FILES data/ahkunix.desktop
     DESTINATION share/applications
@@ -99,7 +136,7 @@ install(FILES examples/ads.ahkl
 set(CPACK_PACKAGE_NAME "ahkunix")
 set(CPACK_PACKAGE_VENDOR "AHKUnix")
 set(CPACK_PACKAGE_CONTACT "local")
-set(CPACK_PACKAGE_VERSION "0.4.0")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Linux evdev/uinput hotstring daemon")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "AHKUnix")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libevdev2, sudo, wl-clipboard | xclip | xsel")
