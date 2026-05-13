@@ -1,6 +1,7 @@
 #include "ahkunix/commands/ScriptParser.hpp"
 
 #include "ahkunix/StringUtil.hpp"
+#include "ahkunix/commands/CancelCommand.hpp"
 #include "ahkunix/commands/IfCommand.hpp"
 #include "ahkunix/commands/SendInputCommand.hpp"
 #include "ahkunix/commands/SleepCommand.hpp"
@@ -77,98 +78,106 @@ namespace ahk::cmd
             return close != std::string::npos && brace != std::string::npos && brace > close;
         }
 
-        bool starts_with_word(const std::string &line, const std::string &word)
+        char lower_ascii(char ch)
         {
-            if (line.size() < word.size())
-            {
-                return false;
-            }
-            if (line.compare(0, word.size(), word) != 0)
-            {
-                return false;
-            }
-            if (line.size() == word.size())
-            {
-                return true;
-            }
-            const char next = line[word.size()];
-            return std::isspace(static_cast<unsigned char>(next)) || next == '(' || next == '{';
+            return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
         }
 
-        bool starts_with_word_ci(const std::string &line, const std::string &word)
+        bool is_command_boundary(char ch)
         {
-            if (line.size() < word.size())
+            return std::isspace(static_cast<unsigned char>(ch)) || ch == ',' || ch == '(' || ch == '{';
+        }
+
+        bool starts_with_command(const std::string &line, const std::string &command)
+        {
+            if (line.size() < command.size())
             {
                 return false;
             }
-            for (std::size_t i = 0; i < word.size(); ++i)
+            if (line.compare(0, command.size(), command) != 0)
             {
-                const auto a = static_cast<unsigned char>(line[i]);
-                const auto b = static_cast<unsigned char>(word[i]);
-                if (std::tolower(a) != std::tolower(b))
+                return false;
+            }
+
+            return line.size() == command.size() || is_command_boundary(line[command.size()]);
+        }
+
+        void lowercase_range(std::string &line, std::size_t pos, std::size_t len)
+        {
+            for (std::size_t i = pos; i < pos + len; ++i)
+            {
+                line[i] = lower_ascii(line[i]);
+            }
+        }
+
+        bool normalize_command_at(std::string &line, std::size_t pos, const std::string &command)
+        {
+            if (line.size() < pos + command.size())
+            {
+                return false;
+            }
+            for (std::size_t i = 0; i < command.size(); ++i)
+            {
+                if (lower_ascii(line[pos + i]) != command[i])
                 {
                     return false;
                 }
             }
-            if (line.size() == word.size())
-            {
-                return true;
-            }
-            const char next = line[word.size()];
-            return std::isspace(static_cast<unsigned char>(next)) || next == '(' || next == '{';
-        }
 
-        bool is_if_else_line_ci(const std::string &line)
-        {
-            return starts_with_word_ci(line, "if") || starts_with_word_ci(line, "else");
-        }
-
-        bool is_if_else_case_allowed(const std::string &line)
-        {
-            return starts_with_word(line, "if") ||
-                   starts_with_word(line, "IF") ||
-                   starts_with_word(line, "else") ||
-                   starts_with_word(line, "ELSE");
-        }
-
-        [[noreturn]] void throw_if_case_error(const std::string &origin, const std::string &line)
-        {
-            const std::string where = origin.empty() ? "script" : origin;
-            throw std::runtime_error(
-                where + ": unsupported If/Else case. Use only if/else or IF/ELSE. Line: " + line);
-        }
-
-        void warn_if_case_error(const std::string &origin, const std::string &line)
-        {
-            const std::string where = origin.empty() ? "script" : origin;
-            std::cerr << "[warn] " << where
-                      << ": ignored line due to unsupported If/Else case (allowed: if/else or IF/ELSE): "
-                      << line << "\n";
-        }
-    } // namespace
-
-    bool ScriptParser::starts_with_ci(const std::string &text, const std::string &prefix)
-    {
-        if (text.size() < prefix.size())
-        {
-            return false;
-        }
-
-        for (std::size_t i = 0; i < prefix.size(); ++i)
-        {
-            const auto a = static_cast<unsigned char>(text[i]);
-            const auto b = static_cast<unsigned char>(prefix[i]);
-            if (std::tolower(a) != std::tolower(b))
+            const std::size_t end = pos + command.size();
+            if (end != line.size() && !is_command_boundary(line[end]))
             {
                 return false;
             }
+
+            lowercase_range(line, pos, command.size());
+            return true;
         }
 
-        return true;
-    }
+        std::string normalize_command_tokens(std::string line)
+        {
+            static const std::vector<std::string> commands = {
+                "sendinput",
+                "sendmessage",
+                "random",
+                "return",
+                "cancel",
+                "sleep",
+                "pause",
+                "input",
+                "else",
+                "if",
+            };
+
+            for (const auto &command : commands)
+            {
+                if (!normalize_command_at(line, 0, command))
+                {
+                    continue;
+                }
+
+                if (command == "else")
+                {
+                    std::size_t if_pos = command.size();
+                    while (if_pos < line.size() && std::isspace(static_cast<unsigned char>(line[if_pos])))
+                    {
+                        ++if_pos;
+                    }
+                    (void)normalize_command_at(line, if_pos, "if");
+                }
+
+                break;
+            }
+
+            return line;
+        }
+    } // namespace
 
     std::vector<std::string> ScriptParser::preprocess_lines(const std::string &block, bool strict_mode, const std::string &origin)
     {
+        (void)strict_mode;
+        (void)origin;
+
         std::vector<std::string> out;
         std::string current;
 
@@ -190,17 +199,7 @@ namespace ahk::cmd
                 return;
             }
 
-            if (is_if_else_line_ci(line) && !is_if_else_case_allowed(line))
-            {
-                if (strict_mode)
-                {
-                    throw_if_case_error(origin, line);
-                }
-                warn_if_case_error(origin, line);
-                return;
-            }
-
-            out.push_back(std::move(line));
+            out.push_back(normalize_command_tokens(std::move(line)));
         };
 
         for (char ch : block)
@@ -231,7 +230,7 @@ namespace ahk::cmd
 
     CommandPtr ScriptParser::parse_simple_command(const std::string &line)
     {
-        if (starts_with_ci(line, "SendInput"))
+        if (starts_with_command(line, "sendinput"))
         {
             std::string args = trim(line.substr(9));
             if (!args.empty() && args.front() == ',')
@@ -245,7 +244,7 @@ namespace ahk::cmd
             return std::make_shared<SendInputCommand>(args);
         }
 
-        if (starts_with_ci(line, "Sleep"))
+        if (starts_with_command(line, "sleep"))
         {
             std::string args = trim(line.substr(5));
             if (!args.empty() && args.front() == ',')
@@ -259,11 +258,10 @@ namespace ahk::cmd
             return std::make_shared<SleepCommand>(std::stoi(args));
         }
 
-        if (starts_with_ci(line, "Random"))
+        if (starts_with_command(line, "random"))
         {
             static const std::regex re(
-                R"(^\s*Random\s*,\s*([A-Za-z_]\w*)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*$)",
-                std::regex::icase);
+                R"(^\s*random\s*,\s*([A-Za-z_]\w*)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*$)");
 
             std::smatch m;
             if (!std::regex_match(line, m, re))
@@ -277,9 +275,14 @@ namespace ahk::cmd
                 std::stoi(m[3].str()));
         }
 
-        if (starts_with_ci(line, "SendMessage") || starts_with_ci(line, "Input") || starts_with_ci(line, "Return"))
+        if (starts_with_command(line, "sendmessage") || starts_with_command(line, "input") || starts_with_command(line, "return"))
         {
             return nullptr;
+        }
+
+        if (starts_with_command(line, "cancel") || starts_with_command(line, "pause"))
+        {
+            return std::make_shared<CancelCommand>();
         }
 
         return nullptr;
@@ -294,12 +297,16 @@ namespace ahk::cmd
 
         std::string line = lines[idx];
 
-        if (starts_with_ci(line, "Else If"))
+        if (starts_with_command(line, "else"))
         {
-            line = trim(line.substr(5));
+            const std::string maybe_if = trim(line.substr(4));
+            if (starts_with_command(maybe_if, "if"))
+            {
+                line = maybe_if;
+            }
         }
 
-        if (!starts_with_ci(line, "If"))
+        if (!starts_with_command(line, "if"))
         {
             throw std::runtime_error("expected If/Else If, got: " + line);
         }
@@ -319,11 +326,12 @@ namespace ahk::cmd
         CommandList true_branch = parse_block_lines(lines, idx, true);
         CommandList false_branch;
 
-        if (idx < lines.size() && starts_with_ci(lines[idx], "Else"))
+        if (idx < lines.size() && starts_with_command(lines[idx], "else"))
         {
             const std::string else_line = lines[idx];
 
-            if (starts_with_ci(else_line, "Else If"))
+            const std::string maybe_if = trim(else_line.substr(4));
+            if (starts_with_command(maybe_if, "if"))
             {
                 false_branch.push_back(parse_if_chain(lines, idx));
             }
@@ -364,13 +372,13 @@ namespace ahk::cmd
                 continue;
             }
 
-            if (starts_with_ci(line, "If"))
+            if (starts_with_command(line, "if"))
             {
                 commands.push_back(parse_if_chain(lines, idx));
                 continue;
             }
 
-            if (starts_with_ci(line, "Else"))
+            if (starts_with_command(line, "else"))
             {
                 break;
             }

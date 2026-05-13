@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(AHKUnix VERSION 0.5.0 LANGUAGES CXX)
+project(AHKUnix VERSION 0.5.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,7 @@ set(AHKUNIX_CORE_SOURCES
     src/Signals.cpp
     src/StringUtil.cpp
     src/UinputKeyboard.cpp
+    src/commands/CancelCommand.cpp
     src/commands/TextCommand.cpp
     src/commands/SendInputCommand.cpp
     src/commands/SleepCommand.cpp
@@ -124,7 +125,6 @@ add_custom_target(clean-full
 )
 
 install(TARGETS ahkunixd ahkunixctl RUNTIME DESTINATION bin)
-install(PROGRAMS scripts/ahkunix-open DESTINATION bin)
 install(FILES data/ahkunix.desktop
     DESTINATION share/applications
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
@@ -133,7 +133,10 @@ install(FILES data/application-x-ahkunix.xml
     DESTINATION share/mime/packages
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )
-install(FILES examples/ads.ahkl
+install(FILES
+    examples/ads.ahkl
+    examples/weather_broadcast.ahkl
+    examples/worker_cancel.ahkl
     DESTINATION share/doc/ahkunix/examples
     PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
 )

@@ -18,7 +18,7 @@ mkdir -p "$HOME/.local/share/applications"
 mkdir -p "$HOME/.local/share/mime/packages"
 
 install -m 0755 "$ROOT_DIR/build/ahkunixd" "$HOME/.local/bin/ahkunixd"
-install -m 0755 "$ROOT_DIR/scripts/ahkunix-open" "$HOME/.local/bin/ahkunix-open"
+install -m 0755 "$ROOT_DIR/build/ahkunixctl" "$HOME/.local/bin/ahkunixctl"
 install -m 0644 "$ROOT_DIR/data/ahkunix.desktop" "$HOME/.local/share/applications/ahkunix.desktop"
 install -m 0644 "$ROOT_DIR/data/application-x-ahkunix.xml" "$HOME/.local/share/mime/packages/application-x-ahkunix.xml"
 
@@ -34,8 +34,8 @@ xdg-mime default ahkunix.desktop application/x-ahkunix
 
 echo "Installed:"
 echo "  $HOME/.local/bin/ahkunixd"
-echo "  $HOME/.local/bin/ahkunix-open"
+echo "  $HOME/.local/bin/ahkunixctl"
 echo
 echo "Make sure ~/.local/bin is in PATH."
 echo "Run scripts with:"
-echo "  ahkunix-open file.ahkl"
+echo "  ahkunixctl"

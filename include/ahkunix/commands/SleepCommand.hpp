@@ -10,6 +10,10 @@ namespace ahk::cmd
         explicit SleepCommand(int milliseconds);
 
         void execute(UinputKeyboard &injector, Clipboard &clipboard) const override;
+        void execute_interruptible(
+            UinputKeyboard &injector,
+            Clipboard &clipboard,
+            const std::atomic<bool> &stop_requested) const override;
         std::string describe() const override;
 
     private:

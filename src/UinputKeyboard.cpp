@@ -11,6 +11,7 @@
 
 #include <chrono>
 #include <cstring>
+#include <mutex>
 #include <thread>
 
 namespace ahk {
@@ -68,6 +69,7 @@ public:
     }
 
     Fd fd;
+    std::mutex mutex;
     bool created = false;
 
 private:
@@ -89,6 +91,7 @@ UinputKeyboard::~UinputKeyboard() {
 }
 
 void UinputKeyboard::tap(int key_code) {
+    std::lock_guard lock(impl_->mutex);
     impl_->emit(EV_KEY, key_code, 1);
     impl_->sync();
     impl_->emit(EV_KEY, key_code, 0);
@@ -97,7 +100,13 @@ void UinputKeyboard::tap(int key_code) {
 
 void UinputKeyboard::backspace(std::size_t count) {
     for (std::size_t i = 0; i < count; ++i) {
-        tap(KEY_BACKSPACE);
+        {
+            std::lock_guard lock(impl_->mutex);
+            impl_->emit(EV_KEY, KEY_BACKSPACE, 1);
+            impl_->sync();
+            impl_->emit(EV_KEY, KEY_BACKSPACE, 0);
+            impl_->sync();
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(8));
     }
 }
@@ -106,11 +115,13 @@ void UinputKeyboard::forward(const RawEvent& ev) {
     if (ev.type != EV_KEY) {
         return;
     }
+    std::lock_guard lock(impl_->mutex);
     impl_->emit(EV_KEY, ev.code, ev.value);
     impl_->sync();
 }
 
 void UinputKeyboard::hold_combo_and_tap(const std::vector<int>& modifiers, int key_code) {
+    std::lock_guard lock(impl_->mutex);
     for (int mod : modifiers) {
         impl_->emit(EV_KEY, mod, 1);
     }

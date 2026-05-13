@@ -1,5 +1,4 @@
 #include "ahkunix/EvdevKeyboard.hpp"
-
 #include "ahkunix/Errors.hpp"
 #include "ahkunix/Fd.hpp"
 
@@ -15,7 +14,7 @@ namespace ahk {
 class EvdevKeyboard::Impl {
 public:
     explicit Impl(const std::filesystem::path& path) {
-        fd.reset(::open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC));
+        fd.reset(::open(path.c_str(), O_RDONLY | O_CLOEXEC));
         if (fd.get() < 0) {
             throw SysError("open " + path.string());
         }
@@ -29,6 +28,11 @@ public:
         if (!libevdev_has_event_type(dev, EV_KEY)) {
             throw std::runtime_error(path.string() + " is not a keyboard-like evdev device");
         }
+
+        if (libevdev_has_event_type(dev, EV_REL) || libevdev_has_event_type(dev, EV_ABS)) {
+            throw std::runtime_error(path.string() + " is a mouse/touchpad (has axes). Skipping.");
+        }
+        // -----------------------------------------
     }
 
     ~Impl() {
@@ -42,15 +46,16 @@ public:
         if (grabbed) {
             return;
         }
-        if (ioctl(fd.get(), EVIOCGRAB, 1) < 0) {
-            throw SysError("EVIOCGRAB");
-        }
+        // FIXME: WINE FIXED. There is wine and other emulators that do not support EVIOCGRAB, and they're killing each other 
+        // if (ioctl(fd.get(), EVIOCGRAB, 1) < 0) {
+        //     throw SysError("EVIOCGRAB");
+        // }
+
         grabbed = true;
     }
 
     void ungrab() noexcept {
         if (grabbed) {
-            ioctl(fd.get(), EVIOCGRAB, 0);
             grabbed = false;
         }
     }

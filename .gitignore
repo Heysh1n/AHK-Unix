@@ -1,18 +1,8 @@
-# ==========================================
-# 1. Специфичные папки проекта (Билд и Пакеты)
-# ==========================================
+# Build directories and generated CMake state
 build/
 Build/
 build-*/
-_CPack_Packages/
-Testing/
-
-# Игнорируем папку Wiki (так как это обычно отдельный репозиторий на GitHub)
-AHK-Unix.wiki/
-
-# ==========================================
-# 2. Файлы сборки CMake (на случай сборки в корне)
-# ==========================================
+cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 CMakeConfigureLog.yaml
@@ -25,22 +15,18 @@ build.ninja
 .ninja_deps
 .ninja_log
 .cmake/
+Testing/
+_CPack_Packages/
+AHK-Unix.wiki/
 
-# ==========================================
-# 3. Скомпилированные файлы, библиотеки и бинарники
-# ==========================================
-# Объектные файлы
+# Compiled objects, libraries, and local binaries
 *.o
 *.obj
 *.lo
 *.slo
 *.d
-
-# Предкомпилированные заголовки
 *.gch
 *.pch
-
-# Статические и динамические библиотеки
 *.a
 *.lib
 *.la
@@ -49,53 +35,64 @@ build.ninja
 *.so.*
 *.dylib
 *.dll
-
-# Исполняемые файлы
 *.exe
 *.out
 *.app
-# Бинарники вашего проекта (если скомпилированы в корне)
-ahkunixctl
 ahkunixd
+ahkunixctl
 
-# ==========================================
-# 4. Готовые пакеты сборки (Дистрибутивы)
-# ==========================================
+# Packages and archives
 *.deb
 *.rpm
 *.AppImage
+*.tar
 *.tar.gz
+*.tgz
 *.zip
 
-
-PROJECT_DESCRIPTION.md
-
-# ==========================================
-# 5. Кэш и временные файлы систем / IDE
-# ==========================================
+# IDEs, editors, and language caches
+.idea/
 .cache/
 .pytest_cache/
 .mypy_cache/
 vcpkg_installed/
 
-# VS Code
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+# Hard-ignore all VSCode/Cursor/Codex workspace state
+.vscode/
+.cursor/
+.cursor-cache/
+.codex/
+.agents/
 
-# CLion / JetBrains
-.idea/
+# AI context, Wiki, and generated notes
+AHK-Unix.wiki/
+PROJECT_*.md
+chat-history/
+chat_history/
+conversation-history/
+conversations/
+transcripts/
+*.chat
+*.chat.md
+*.conversation
+*.conversation.json
+*.transcript
+*.transcript.md
+codex-*.json
+codex-*.log
+cursor-*.log
 
-# Временные файлы редакторов (Vim, Nano, etc.)
-*.tmp
+# Logs, temporary dumps, and editor swap files
 *.log
+*.tmp
+*.temp
+*.dump
+*.dmp
 *.bak
 *.swp
 *.swo
 *~
 
-# Файлы ОС (macOS / Windows)
+# OS metadata
 .DS_Store
 Thumbs.db

@@ -5,10 +5,13 @@
 
 namespace ahk {
 
+class UinputKeyboard;
+
 class Clipboard {
 public:
     void set_text(const std::string& text) const;
     std::string get_text() const;
+    void paste_text_synchronously(const std::string& text, UinputKeyboard& injector) const;
 
 private:
     static bool has_env(const char* name);

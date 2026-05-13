@@ -22,15 +22,46 @@ namespace ahk
 
     using namespace ahk::cmd;
 
+    namespace
+    {
+        bool sleep_interruptible(std::chrono::milliseconds duration, const std::atomic<bool> &stop_requested)
+        {
+            auto remaining = duration;
+            while (remaining.count() > 0)
+            {
+                if (stop_requested.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+
+                const auto slice = std::min(remaining, std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(slice);
+                remaining -= slice;
+            }
+
+            return !stop_requested.load(std::memory_order_acquire);
+        }
+    } // namespace
+
     Daemon::Daemon(std::filesystem::path input_path, std::vector<Hotstring> hotstrings)
         : physical_(input_path),
           injector_(),
           clipboard_(),
           ring_(ring_capacity(hotstrings)),
-          hotstrings_(std::move(hotstrings)) {}
+          hotstrings_(std::move(hotstrings))
+    {
+        macro_worker_ = std::thread(&Daemon::macro_worker_loop, this);
+    }
+
+    Daemon::~Daemon()
+    {
+        stop_macro_worker();
+    }
 
     void Daemon::reload_script(const std::filesystem::path &path, bool strict_mode)
     {
+        request_macro_stop();
+
         const auto layout = LayoutProfile::russian_qwerty();
         auto hotstrings = AhkParser::parse_file(path, layout, strict_mode);
         RingBuffer new_ring(ring_capacity(hotstrings));
@@ -86,14 +117,13 @@ namespace ahk
             }
         }
 
+        stop_macro_worker();
         physical_.ungrab();
         std::cerr << "Stopped.\n";
     }
 
     void Daemon::handle_event(const RawEvent &ev)
     {
-        injector_.forward(ev);
-
         {
             std::lock_guard lock(mutex_);
 
@@ -117,13 +147,15 @@ namespace ahk
                         pressed_keys_.erase(ev.code);
                     }
                 }
-            }
 
-            if (ev.type == EV_KEY && ev.value == 1)
-            {
-                ring_.push(ev.code);
+                if (ev.value == 1)
+                {
+                    ring_.push(ev.code);
+                }
             }
         }
+
+        injector_.forward(ev);
 
         if (ev.type != EV_KEY || ev.value != 1)
         {
@@ -136,47 +168,178 @@ namespace ahk
             return;
         }
 
-        if (matched->erase_trigger)
+        if (is_interrupt_macro(*matched))
         {
-            injector_.backspace(matched->trigger_keys.size());
+            request_macro_stop();
+            std::lock_guard lock(mutex_);
+            ring_.clear();
+            return;
         }
 
-        // NEW: Execute commands if available, otherwise use legacy replacement
-        if (!matched->commands.empty())
-        {
-            // Initialize context if needed (for random/variables)
-            if (!matched->context)
-            {
-                matched->context = std::make_shared<cmd::Context>();
-            }
-
-            for (const auto &cmd : matched->commands)
-            {
-                cmd->bind_context(matched->context);
-                cmd->execute(injector_, clipboard_);
-            }
-        }
-        else if (!matched->replacement_utf8.empty())
-        {
-            // Legacy path: simple text replacement
-            clipboard_.set_text(matched->replacement_utf8);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
-            injector_.hold_combo_and_tap({KEY_LEFTCTRL}, KEY_V);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
-
-            for (const auto &[key, count] : matched->tail_keys)
-            {
-                for (int i = 0; i < count; ++i)
-                {
-                    injector_.tap(key);
-                }
-            }
-        }
+        submit_macro(std::move(*matched));
 
         {
             std::lock_guard lock(mutex_);
             ring_.clear();
         }
+    }
+
+    void Daemon::submit_macro(Hotstring hotstring)
+    {
+        {
+            std::lock_guard lock(macro_mutex_);
+            if (macro_worker_stop_)
+            {
+                return;
+            }
+            macro_queue_.push_back(std::move(hotstring));
+        }
+
+        macro_cv_.notify_one();
+    }
+
+    void Daemon::request_macro_stop()
+    {
+        {
+            std::lock_guard lock(macro_mutex_);
+            macro_queue_.clear();
+            stop_requested_.store(true, std::memory_order_release);
+        }
+
+        macro_cv_.notify_one();
+    }
+
+    void Daemon::stop_macro_worker() noexcept
+    {
+        request_macro_stop();
+
+        {
+            std::lock_guard lock(macro_mutex_);
+            macro_worker_stop_ = true;
+            macro_queue_.clear();
+        }
+
+        macro_cv_.notify_one();
+
+        if (macro_worker_.joinable() && macro_worker_.get_id() != std::this_thread::get_id())
+        {
+            macro_worker_.join();
+        }
+    }
+
+    void Daemon::macro_worker_loop() noexcept
+    {
+        while (true)
+        {
+            Hotstring job;
+
+            {
+                std::unique_lock lock(macro_mutex_);
+                macro_cv_.wait(lock, [this] {
+                    return macro_worker_stop_ || !macro_queue_.empty();
+                });
+
+                if (macro_worker_stop_)
+                {
+                    break;
+                }
+
+                job = std::move(macro_queue_.front());
+                macro_queue_.pop_front();
+                stop_requested_.store(false, std::memory_order_release);
+            }
+
+            try
+            {
+                execute_macro(job);
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "Macro execution failed: " << e.what() << '\n';
+            }
+            catch (...)
+            {
+                std::cerr << "Macro execution failed: unknown error\n";
+            }
+        }
+    }
+
+    void Daemon::execute_macro(const Hotstring &hotstring)
+    {
+        if (hotstring.erase_trigger)
+        {
+            for (std::size_t i = 0; i < hotstring.trigger_keys.size(); ++i)
+            {
+                if (stop_requested_.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+                injector_.tap(KEY_BACKSPACE);
+                if (!sleep_interruptible(std::chrono::milliseconds(8), stop_requested_))
+                {
+                    return;
+                }
+            }
+        }
+
+        if (stop_requested_.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        if (!hotstring.commands.empty())
+        {
+            if (!hotstring.context)
+            {
+                hotstring.context = std::make_shared<cmd::Context>();
+            }
+
+            for (const auto &cmd : hotstring.commands)
+            {
+                if (stop_requested_.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+
+                cmd->bind_context(hotstring.context);
+                cmd->execute_interruptible(injector_, clipboard_, stop_requested_);
+            }
+            return;
+        }
+
+        if (!hotstring.replacement_utf8.empty())
+        {
+            execute_legacy_replacement(hotstring);
+        }
+    }
+
+    void Daemon::execute_legacy_replacement(const Hotstring &hotstring)
+    {
+        if (stop_requested_.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        clipboard_.paste_text_synchronously(hotstring.replacement_utf8, injector_);
+
+        for (const auto &[key, count] : hotstring.tail_keys)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                if (stop_requested_.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+                injector_.tap(key);
+            }
+        }
+    }
+
+    bool Daemon::is_interrupt_macro(const Hotstring &hotstring)
+    {
+        return std::any_of(hotstring.commands.begin(), hotstring.commands.end(), [](const auto &cmd) {
+            return cmd && cmd->is_interrupt();
+        });
     }
 
     std::optional<Hotstring> Daemon::find_match() const

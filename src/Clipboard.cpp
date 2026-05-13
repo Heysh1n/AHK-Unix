@@ -2,16 +2,21 @@
 
 #include "ahkunix/Errors.hpp"
 #include "ahkunix/Fd.hpp"
+#include "ahkunix/UinputKeyboard.hpp"
 
+#include <linux/input-event-codes.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <mutex>
+#include <thread>
 
 extern char** environ;
 
@@ -53,6 +58,27 @@ std::string Clipboard::get_text() const {
     }
 
     return {};
+}
+
+void Clipboard::paste_text_synchronously(const std::string& text, UinputKeyboard& injector) const {
+    static std::mutex pipeline_mutex;
+    std::lock_guard lock(pipeline_mutex);
+
+    const std::string old_clipboard = get_text();
+    set_text(text);
+
+    try {
+        injector.hold_combo_and_tap({KEY_LEFTCTRL}, KEY_V);
+        std::this_thread::sleep_for(std::chrono::milliseconds(75));
+    } catch (...) {
+        try {
+            set_text(old_clipboard);
+        } catch (...) {
+        }
+        throw;
+    }
+
+    set_text(old_clipboard);
 }
 
 bool Clipboard::has_env(const char* name) {

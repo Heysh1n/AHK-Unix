@@ -174,14 +174,18 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
         return t.empty() || t.starts_with(";") || t.starts_with("#");
     };
 
-    auto starts_with_ci = [](const std::string &text, const std::string &prefix) {
-        if (text.size() < prefix.size()) return false;
-        for (std::size_t i = 0; i < prefix.size(); ++i) {
+    auto is_command_boundary = [](char ch) {
+        return std::isspace(static_cast<unsigned char>(ch)) || ch == ',' || ch == '(' || ch == '{';
+    };
+
+    auto starts_with_command_ci = [&](const std::string &text, const std::string &command) {
+        if (text.size() < command.size()) return false;
+        for (std::size_t i = 0; i < command.size(); ++i) {
             const auto a = static_cast<unsigned char>(text[i]);
-            const auto b = static_cast<unsigned char>(prefix[i]);
+            const auto b = static_cast<unsigned char>(command[i]);
             if (std::tolower(a) != std::tolower(b)) return false;
         }
-        return true;
+        return text.size() == command.size() || is_command_boundary(text[command.size()]);
     };
 
     auto looks_like_trigger_line = [&](const std::string &line) {
@@ -189,14 +193,16 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
         if (t.empty()) return false;
 
         // Never treat command lines as trigger lines, even if they contain "::"
-        if (starts_with_ci(t, "SendInput") ||
-            starts_with_ci(t, "Sleep") ||
-            starts_with_ci(t, "Random") ||
-            starts_with_ci(t, "If") ||
-            starts_with_ci(t, "Else") ||
-            starts_with_ci(t, "SendMessage") ||
-            starts_with_ci(t, "Input") ||
-            starts_with_ci(t, "Return") ||
+        if (starts_with_command_ci(t, "SendInput") ||
+            starts_with_command_ci(t, "Sleep") ||
+            starts_with_command_ci(t, "Random") ||
+            starts_with_command_ci(t, "Cancel") ||
+            starts_with_command_ci(t, "Pause") ||
+            starts_with_command_ci(t, "If") ||
+            starts_with_command_ci(t, "Else") ||
+            starts_with_command_ci(t, "SendMessage") ||
+            starts_with_command_ci(t, "Input") ||
+            starts_with_command_ci(t, "Return") ||
             t == "{" || t == "}") {
             return false;
         }
@@ -223,25 +229,26 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
         return true;
     };
 
-        auto looks_like_action_line = [&](const std::string &line) {
-            std::string t = trim(line);
-            if (t.empty())
-            {
-                return false;
-            }
+    auto looks_like_action_line = [&](const std::string &line) {
+        std::string t = trim(line);
+        if (t.empty())
+        {
+            return false;
+        }
 
-            return starts_with_ci(t, "SendInput") ||
-                starts_with_ci(t, "Sleep") ||
-                starts_with_ci(t, "Random") ||
-                starts_with_ci(t, "If") ||
-                starts_with_ci(t, "Else") ||
-                starts_with_ci(t, "SendMessage") ||
-                starts_with_ci(t, "Input") ||
-                starts_with_ci(t, "Return") ||
-                t == "{" || t == "}";
-        };
+        return starts_with_command_ci(t, "SendInput") ||
+            starts_with_command_ci(t, "Sleep") ||
+            starts_with_command_ci(t, "Random") ||
+            starts_with_command_ci(t, "Cancel") ||
+            starts_with_command_ci(t, "Pause") ||
+            starts_with_command_ci(t, "If") ||
+            starts_with_command_ci(t, "Else") ||
+            starts_with_command_ci(t, "SendMessage") ||
+            starts_with_command_ci(t, "Input") ||
+            starts_with_command_ci(t, "Return") ||
+            t == "{" || t == "}";
+    };
 
-    
     std::vector<Hotstring> hotstrings;
     bool in_multiline_comment = false;
 
@@ -309,7 +316,7 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
                 --brace_depth;
             }
 
-            if ((t == "Return" || t == "return") && brace_depth == 0)
+            if (starts_with_command_ci(t, "Return") && brace_depth == 0)
             {
                 saw_return = true;
                 break;

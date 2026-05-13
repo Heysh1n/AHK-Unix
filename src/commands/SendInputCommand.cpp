@@ -3,6 +3,8 @@
 #include "ahkunix/LayoutProfile.hpp"
 #include "ahkunix/UinputKeyboard.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <linux/input-event-codes.h>
 #include <sstream>
@@ -11,13 +13,34 @@
 
 namespace ahk::cmd
 {
+    namespace
+    {
+        bool sleep_interruptible(std::chrono::milliseconds duration, const std::atomic<bool> &stop_requested)
+        {
+            auto remaining = duration;
+            while (remaining.count() > 0)
+            {
+                if (stop_requested.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+
+                const auto slice = std::min(remaining, std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(slice);
+                remaining -= slice;
+            }
+
+            return !stop_requested.load(std::memory_order_acquire);
+        }
+    } // namespace
+
     SendInputCommand::SendInputCommand(std::string sequence)
         : sequence_(std::move(sequence))
     {
         parse_sequence();
     }
 
-        void SendInputCommand::parse_sequence()
+    void SendInputCommand::parse_sequence()
     {
         auto append_text = [this](const std::string &s) {
             if (s.empty())
@@ -85,6 +108,44 @@ namespace ahk::cmd
         }
     }
 
+    void SendInputCommand::execute_interruptible(
+        UinputKeyboard &injector,
+        Clipboard &clipboard,
+        const std::atomic<bool> &stop_requested) const
+    {
+        for (const auto &part : parts_)
+        {
+            if (stop_requested.load(std::memory_order_acquire))
+            {
+                return;
+            }
+
+            if (part.is_special_key)
+            {
+                for (int i = 0; i < part.repeat_count; ++i)
+                {
+                    if (stop_requested.load(std::memory_order_acquire))
+                    {
+                        return;
+                    }
+                    injector.tap(part.key_code);
+                    if (!sleep_interruptible(std::chrono::milliseconds(5), stop_requested))
+                    {
+                        return;
+                    }
+                }
+                continue;
+            }
+
+            if (part.text.empty())
+            {
+                continue;
+            }
+
+            clipboard.paste_text_synchronously(part.text, injector);
+        }
+    }
+
     void SendInputCommand::execute(UinputKeyboard &injector, Clipboard &clipboard) const
     {
         for (const auto &part : parts_)
@@ -99,13 +160,7 @@ namespace ahk::cmd
             }
             else if (!part.text.empty())
             {
-                const std::string old_clipboard = clipboard.get_text();
-                clipboard.set_text(part.text);
-                std::this_thread::sleep_for(std::chrono::milliseconds(30));
-                injector.hold_combo_and_tap({KEY_LEFTCTRL}, KEY_V);
-                std::this_thread::sleep_for(std::chrono::milliseconds(30));
-                std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                clipboard.set_text(old_clipboard);
+                clipboard.paste_text_synchronously(part.text, injector);
             }
         }
     }

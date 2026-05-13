@@ -1,10 +1,33 @@
-:?*:ккв1::Куплю квартиру в ЛТО. Бюджет: Свободный.
-:?*:пкв1::Продам квартиру в . Цена: Договорная.{Left 19}
-:?*:когород1::Куплю огород в ЛТО. Бюджет: Свободный.
-:?*:погород1::Продам огород в . Цена: Договорная.{Left 21}
-:?*:сарог1::Сдам в аренду огород в . Цена: Договорная.
-:?*:варог1::Возьму в аренду огород в . Бюджет: Свободный.
-:?*:пбиз1::Продам п/п "". Цена: Договорная.{Left 20}
-:?*:кбиз1::Куплю п/п в ЛТО. Бюджет: Свободный.
-:?*:раббиз1::Работает п/п "" в. Ждем всех.{Left 6}
-:?*:набор1::Проходит набор в ЧОП. Связывайтесь.
+/*
+    AHKUnix 0.5.7 compact demo.
+    Shows Cancel, mixed command casing, if/else, Sleep, and comments.
+*/
+
+:*?:11::221B Baker Street, London
+:*?:22::Sent with AHKUnix 0.5.7
+
+F12::
+Cancel
+Return
+
+Ctrl & F12::
+Pause
+Return
+
+NumPad1::
+SendInput, Quick ad line one.{Enter}
+sendinput, Quick ad line two keeps its string casing.{Enter}
+Return
+
+NumPad2::
+Random, variant, 1, 2
+If (variant = 1) {
+    SendInput, Variant ONE selected.{Enter}
+    sleep, 250
+    sendinput, First branch complete.{Enter}
+} else {
+    sEnDiNpUt, Variant TWO selected.{Enter}
+    Sleep, 250
+    SendInput, Second branch complete.{Enter}
+}
+Return

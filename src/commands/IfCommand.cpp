@@ -2,6 +2,7 @@
 #include "ahkunix/Clipboard.hpp"
 #include "ahkunix/UinputKeyboard.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <random>
 #include <regex>
@@ -129,6 +130,35 @@ namespace ahk::cmd
         {
             cmd->bind_context(context_);
             cmd->execute(injector, clipboard);
+        }
+    }
+
+    void IfCommand::execute_interruptible(
+        UinputKeyboard &injector,
+        Clipboard &clipboard,
+        const std::atomic<bool> &stop_requested) const
+    {
+        if (stop_requested.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        if (!context_)
+        {
+            context_ = std::make_shared<Context>();
+        }
+
+        const bool ok = evaluate_condition();
+        const auto &branch = ok ? true_branch_ : false_branch_;
+
+        for (const auto &cmd : branch)
+        {
+            if (stop_requested.load(std::memory_order_acquire))
+            {
+                return;
+            }
+            cmd->bind_context(context_);
+            cmd->execute_interruptible(injector, clipboard, stop_requested);
         }
     }
 

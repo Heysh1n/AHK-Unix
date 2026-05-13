@@ -1,239 +1,192 @@
-# AHKUnix: AutoHotkey-Style Automation for Linux
+# AHKUnix Project Description
 
-## Overview
+## Version
 
-AHKUnix is a lightweight, low-level automation tool for Linux systems, inspired by AutoHotkey (AHK). It provides text expansion (hotstrings) and hotkey functionality that works consistently across different desktop environments (Wayland, X11) and even in TTY consoles. Unlike GUI-based solutions, AHKUnix operates below the display server layer using Linux's input subsystem (`evdev`) and virtual input devices (`uinput`), ensuring reliable performance without compatibility issues.
+0.5.7
 
-The project consists of a daemon (`ahkunixd`) that runs in the background, monitoring keyboard input and executing user-defined scripts written in `.ahkl` files (AHK-like scripting language).
+## Summary
 
-## Key Features
+AHKUnix is a focused AutoHotkey-style automation daemon for Linux. It provides hotstrings, hotkeys, and small command blocks for keyboard-driven workflows on Wayland, X11, and TTY-oriented environments.
 
-### Core Functionality
-- **Hotstrings**: Automatic text replacement triggers (e.g., `:*?:btw::by the way`)
-- **Hotkeys**: Keyboard shortcuts with modifiers (e.g., `Ctrl & F1::SendInput Hello World`)
-- **Script Execution**: Support for command blocks including `SendInput`, `Sleep`, `Random`, and conditional logic with `if/else`
-- **Caret Control**: Precise cursor positioning after text injection using commands like `{Left}`, `{Right}`, `{Home}`, `{End}`
+The project is written in C++20 and works below the display server layer:
 
-### Technical Advantages
-- **Low-Level Input Handling**: Uses `libevdev` to read from `/dev/input/eventX` devices and `uinput` for injection
-- **Cross-Platform Compatibility**: Works on Wayland, X11, and TTY environments
-- **Clipboard Integration**: Leverages native clipboard tools (`wl-clipboard`, `xclip`, `xsel`) for fast text injection
-- **Device Safety**: Automatically excludes touchpad and mouse devices from keyboard detection
-- **Daemon Architecture**: Runs as a detached background process with proper signal handling
+- `libevdev` reads physical keyboard events from `/dev/input/eventX`
+- `EVIOCGRAB` gives the daemon exclusive control of the selected keyboard
+- `uinput` injects virtual keyboard events
+- `wl-clipboard`, `xclip`, or `xsel` handle text payload insertion through the system clipboard
 
-### Supported Keys and Modifiers
-- **Function Keys**: F1-F12
-- **Numpad Keys**: NumPad0-NumPad9, NumPadAdd, NumPadSub, etc.
-- **Navigation Keys**: Home, End, PageUp, PageDown, Insert, Delete
-- **Modifiers**: Ctrl, Alt, Shift, Meta/Super
-- **Special Keys**: Enter, Tab, Backspace, Escape, Space
+## Design Goals
 
-## Architecture
+- Keep the keyboard event loop responsive.
+- Avoid GUI-framework dependencies.
+- Preserve clipboard content after text injection.
+- Make scripts easy to lint before loading.
+- Support practical AHK v1.1-style syntax without pretending to be a full AutoHotkey interpreter.
 
-### Components
-1. **Daemon (ahkunixd)**: Core executable that monitors input and executes scripts
-2. **Script Parser**: Parses `.ahkl` files with strict syntax rules
-3. **Keyboard Detection**: Automatically identifies and monitors keyboard devices
-4. **Virtual Keyboard**: Creates uinput devices for text/key injection
-5. **Clipboard Manager**: Interfaces with system clipboard for text expansion
+## Runtime Architecture
 
-### Workflow
-1. User starts the daemon with a script file
-2. Daemon grabs the target keyboard device exclusively
-3. Monitors key events via `libevdev`
-4. Matches input against defined triggers
-5. Erases trigger text using backspaces
-6. Injects replacement text via clipboard paste (`Ctrl+V`) and virtual keyboard
-7. Applies any tail commands (cursor movement, etc.)
+```text
+ahkunixd
+    input device detector
+    evdev reader
+    trigger ring buffer
+    parser and AST model
+    macro dispatcher queue
+    worker thread
+    uinput injector
+    clipboard pipeline
 
-## Installation
-
-### Prerequisites
-- Linux kernel with evdev and uinput support
-- C++20 compatible compiler (GCC 10+ or Clang 10+)
-- CMake 3.20+
-- `libevdev` development libraries
-- Clipboard utilities:
-  - Wayland: `wl-clipboard`
-  - X11: `xclip` or `xsel`
-
-### Build Process
-```bash
-git clone https://github.com/Heysh1n/AHKUnix.git
-cd AHKUnix
-cmake -S . -B build
-cmake --build build
+ahkunixctl
+    ping
+    stop
+    load
+    lint
 ```
 
-### Packaging
-The project supports Debian package generation via CPack:
-```bash
-cmake --build build --target package-deb
-```
+The daemon owns the physical input device and keeps reading it in the main event loop. When a trigger matches, the parsed macro is submitted to a worker thread. The worker traverses the AST and executes commands. This keeps long macros and `Sleep` commands from blocking `libevdev` polling.
 
-### Local Installation
-```bash
-cmake --build build --target install-local
-```
-
-## Usage
-
-### Basic Syntax
-Scripts use `.ahkl` extension and follow AHK-inspired syntax:
-
-```
-; Hotstring example
-:*?:btw::by the way
-
-; Hotkey example
-Ctrl & F1::
-    SendInput Hello World{Enter}
-    return
-
-; Conditional logic
-if (condition)
-    SendInput True
-else
-    SendInput False
-```
-
-### Command Line Options
-- `--script <file.ahkl>`: Specify script file
-- `--device <path>`: Target keyboard device (auto-detected if not specified)
-- `--lint`: Validate script syntax without running
-- `--strict`: Enforce strict parsing rules
-- `--verbose`: Enable detailed logging
-
-### Running the Daemon
-```bash
-# Auto-detect keyboard and run script
-ahkunixd --script myscript.ahkl
-
-# Specify device explicitly
-ahkunixd --script myscript.ahkl --device /dev/input/event3
-```
-
-## Script Language Reference
+## Core Features
 
 ### Hotstrings
-- `:*?:trigger::replacement` - Case-insensitive hotstring
-- `::trigger::replacement` - Case-sensitive hotstring
-- `:*C?:trigger::replacement` - Case-sensitive with C suffix
+
+```ahk
+:*?:11::221B Baker Street
+```
 
 ### Hotkeys
-- `Key::action` - Single key trigger
-- `Mod & Key::action` - Modifier combination
-- Supported modifiers: Ctrl, Alt, Shift, Meta
 
-### Commands
-- `SendInput <text>` - Send keystrokes/text
-- `Sleep <milliseconds>` - Pause execution
-- `Random <min>,<max>` - Generate random number
-- `if (condition) / else` - Conditional execution
+```ahk
+F6::
+SendInput, Hello{Enter}
+Return
 
-### Special Keys in SendInput
-- `{Enter}`, `{Tab}`, `{Space}`, `{Backspace}`
-- `{Left}`, `{Right}`, `{Up}`, `{Down}`
-- `{Home}`, `{End}`, `{PageUp}`, `{PageDown}`
-- `{Delete}`, `{Insert}`
-- `{F1}` through `{F12}`
-- `{NumPad0}` through `{NumPad9}`
-
-## Development
-
-### Project Structure
-```
-├── CMakeLists.txt          # Build configuration
-├── include/ahkunix/        # Header files
-├── src/                    # Source code
-│   ├── commands/           # Script command implementations
-│   └── *.cpp               # Core components
-├── examples/               # Sample scripts
-├── packaging/              # Debian packaging files
-├── scripts/                # Build/installation scripts
-├── tests/                  # Test suite
-└── data/                   # Desktop integration files
+Ctrl & F12::
+Cancel
+Return
 ```
 
-### Building from Source
+### Command Blocks
+
+Supported commands:
+
+- `SendInput`
+- `Sleep`
+- `Random`
+- `if`
+- `else`
+- `Cancel`
+- `Pause`
+- `Return`
+
+`SendMessage` and `Input` are accepted as compatibility stubs and ignored.
+
+### Case-Insensitive Command Tokens
+
+The tokenizer normalizes recognized command tokens before AST construction:
+
+```ahk
+SendInput, Upper command spelling
+sendinput, Lower command spelling
+sEnDiNpUt, Mixed command spelling
+If (variant = 1) {
+    Sleep, 100
+} else {
+    sleep, 100
+}
+```
+
+Only command tokens are normalized. String arguments preserve their original casing.
+
+### Worker-Thread AST Execution
+
+Macro execution runs in a dedicated worker thread. The main evdev loop continues reading and forwarding keyboard events while long scripts execute.
+
+### Cancel/Pause Interrupts
+
+Users define their own interrupt hotkeys:
+
+```ahk
+F12::
+Cancel
+Return
+```
+
+When a matched macro contains `Cancel` or `Pause`, it is not queued. The main thread immediately sets `stop_requested`, clears queued macro jobs, and lets the running worker exit at the next cancellation checkpoint.
+
+### Synchronous Clipboard Pipeline
+
+Text insertion uses a strict synchronous pipeline:
+
+1. Save the current clipboard text into C++ memory.
+2. Write macro text to the system clipboard.
+3. Send `Ctrl+V` through `uinput`.
+4. Sleep for 75 milliseconds to let X11/Wayland process paste.
+5. Restore the saved clipboard text immediately.
+
+This removes the race condition caused by delayed clipboard cleanup timers.
+
+## Parser Features
+
+- Single-line comments with `;` or `#`
+- Multi-line comments with `/* ... */`
+- New hotkey format: `Key::` and `Modifier & Key::`
+- Legacy hotstring format: `:*?:11::replacement`
+- Nested `if`/`else` blocks with braces
+- Random integer assignment through `Random, name, min, max`
+- Variable comparisons such as `if (name = 2)`
+
+## Command Line Tools
+
+### Daemon
+
 ```bash
-# Configure
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-# Build
-cmake --build build
-
-# Run tests
-cmake --build build --target test
-
-# Install locally
-cmake --build build --target install-local
+sudo ahkunixd script.ahkl
+sudo ahkunixd --foreground script.ahkl
+sudo ahkunixd --device /dev/input/event3 script.ahkl
+sudo ahkunixd --strict script.ahkl
 ```
 
-### Code Standards
-- C++20 standard
-- Strict compiler warnings enabled
-- Comprehensive test coverage
-- Clean, documented code
+### Client
 
-## Limitations and Known Issues
-
-### Compatibility
-- Not a full AutoHotkey implementation - only core features supported
-- Requires root/sudo for device access (or proper udev rules)
-- Some advanced AHK features not implemented (GUI, COM, etc.)
-
-### Performance Considerations
-- Exclusive device grabbing may interfere with other input monitoring tools
-- Clipboard-based injection may have slight latency vs direct key injection
-- Memory usage scales with script complexity
-
-### Security
-- Runs with elevated privileges for device access
-- Scripts execute with daemon permissions
-- No sandboxing - malicious scripts can perform any allowed operations
-
-## Contributing
-
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Submit pull request
-
-### Testing
 ```bash
-# Run unit tests
-cmake --build build --target test
-
-# Manual testing
-ahkunixd --script test.ahkl --lint  # Syntax check
-ahkunixd --script test.ahkl --verbose  # Debug run
+ahkunixctl ping
+ahkunixctl stop
+ahkunixctl load /absolute/path/script.ahkl
+ahkunixctl lint script.ahkl
+ahkunixctl lint --strict script.ahkl
 ```
 
-### Code Style
-- Follow existing C++ conventions
-- Use meaningful variable names
-- Add documentation for new features
-- Include unit tests for new functionality
+## Limitations
 
-## License
+AHKUnix is not a full AutoHotkey runtime. It does not currently support:
 
-MIT License - see LICENSE file for details.
+- Loops
+- Functions
+- GUI automation
+- Mouse automation
+- Window management
+- Full AHK expression semantics
+- Sandboxed script execution
 
-## Acknowledgments
+## Repository Layout
 
-- Inspired by AutoHotkey for Windows
-- Built using libevdev and Linux input subsystem
-- Community contributions and feedback
+```text
+include/ahkunix/          Public headers
+src/                      Core implementation
+src/commands/             Script command AST nodes
+src/daemon/               Daemon entrypoint and IPC server
+src/cli/                  Client controller
+examples/                 Example .ahkl scripts
+AHK-Unix.wiki/            User-facing documentation pages
+packaging/                Debian packaging hooks
+tests/                    CLI smoke tests
+```
 
-## Version History
+## Status
 
-- **0.1.0**: Initial release with basic hotstring support
-- **0.2.0**: Added hotkey support and modifier combinations
-- **0.3.0**: Implemented command blocks and conditional logic
-- **0.4.0**: Enhanced parser, added caret control, improved stability
+0.5.7 is the stable architecture baseline for:
 
----
-
-This project aims to bring the power and simplicity of AutoHotkey-style automation to the Linux ecosystem, providing a reliable alternative for users who need consistent keyboard automation across different environments.
+- responsive evdev polling during long macro execution
+- configurable script-level interruption through `Cancel`/`Pause`
+- case-insensitive command parsing
+- synchronous clipboard save/paste/restore behavior

@@ -26,6 +26,10 @@ namespace ahk::cmd
         IfCommand(std::string condition, CommandList true_branch, CommandList false_branch = {});
 
         void execute(UinputKeyboard &injector, Clipboard &clipboard) const override;
+        void execute_interruptible(
+            UinputKeyboard &injector,
+            Clipboard &clipboard,
+            const std::atomic<bool> &stop_requested) const override;
         std::string describe() const override;
 
         void set_context(std::shared_ptr<Context> ctx);

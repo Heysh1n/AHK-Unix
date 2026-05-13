@@ -1,9 +1,7 @@
 #include "ahkunix/commands/TextCommand.hpp"
 #include "ahkunix/UinputKeyboard.hpp"
 #include "ahkunix/Clipboard.hpp"
-#include <linux/input-event-codes.h>
-#include <chrono>
-#include <thread>
+#include <atomic>
 
 namespace ahk
 {
@@ -14,13 +12,20 @@ namespace ahk
 
         void TextCommand::execute(UinputKeyboard &injector, Clipboard &clipboard) const
         {
-            const std::string old_clipboard = clipboard.get_text();
-            clipboard.set_text(text_);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
-            injector.hold_combo_and_tap({KEY_LEFTCTRL}, KEY_V);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-            clipboard.set_text(old_clipboard);
+            clipboard.paste_text_synchronously(text_, injector);
+        }
+
+        void TextCommand::execute_interruptible(
+            UinputKeyboard &injector,
+            Clipboard &clipboard,
+            const std::atomic<bool> &stop_requested) const
+        {
+            if (stop_requested.load(std::memory_order_acquire))
+            {
+                return;
+            }
+
+            execute(injector, clipboard);
         }
 
         std::string TextCommand::describe() const
