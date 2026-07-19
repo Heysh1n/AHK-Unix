@@ -3,6 +3,10 @@
 #include "ahkunix/StringUtil.hpp"
 #include "ahkunix/commands/CancelCommand.hpp"
 #include "ahkunix/commands/IfCommand.hpp"
+<<<<<<< HEAD
+=======
+#include "ahkunix/commands/IncrementCommand.hpp"
+>>>>>>> master
 #include "ahkunix/commands/SendInputCommand.hpp"
 #include "ahkunix/commands/SleepCommand.hpp"
 
@@ -285,6 +289,19 @@ namespace ahk::cmd
             return std::make_shared<CancelCommand>();
         }
 
+<<<<<<< HEAD
+=======
+        {
+            static const std::regex increment_re(
+                R"(^\s*([A-Za-z_]\w*)\+\+\s*$)");
+            std::smatch m;
+            if (std::regex_match(line, m, increment_re))
+            {
+                return std::make_shared<IncrementCommand>(m[1].str());
+            }
+        }
+
+>>>>>>> master
         return nullptr;
     }
 

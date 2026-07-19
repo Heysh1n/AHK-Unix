@@ -18,6 +18,11 @@ namespace ahk::cmd
             const std::atomic<bool> &stop_requested) const override;
         std::string describe() const override;
 
+<<<<<<< HEAD
+=======
+        void bind_context(const std::shared_ptr<Context> &ctx) override;
+
+>>>>>>> master
     private:
         std::string sequence_;
 
@@ -31,5 +36,10 @@ namespace ahk::cmd
         std::vector<Part> parts_;
 
         void parse_sequence();
+<<<<<<< HEAD
+=======
+
+        mutable std::shared_ptr<Context> context_;
+>>>>>>> master
     };
 } // namespace ahk::cmd

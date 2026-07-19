@@ -82,7 +82,11 @@ AHKUnix is split into two parts communicating via a Unix Domain Socket (`/tmp/ah
 
 ### Quick Setup
 ```bash
+<<<<<<< HEAD
 git clone [https://github.com/Heysh1n/AHKUnix.git](https://github.com/Heysh1n/AHKUnix.git)
+=======
+git clone https://github.com/Heysh1n/AHKUnix.git
+>>>>>>> master
 cd AHKUnix
 make setup
 

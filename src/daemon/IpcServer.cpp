@@ -71,7 +71,11 @@ namespace ahkunix::daemon
         stop();
     }
 
+<<<<<<< HEAD
     void IpcServer::start(StopCallback on_stop, LoadCallback on_load)
+=======
+    void IpcServer::start(StopCallback on_stop, LoadCallback on_load, StatusCallback on_status)
+>>>>>>> master
     {
         bool expected = false;
         if (!running_.compare_exchange_strong(expected, true))
@@ -81,6 +85,10 @@ namespace ahkunix::daemon
 
         on_stop_ = std::move(on_stop);
         on_load_ = std::move(on_load);
+<<<<<<< HEAD
+=======
+        on_status_ = std::move(on_status);
+>>>>>>> master
 
         try
         {
@@ -242,9 +250,22 @@ namespace ahkunix::daemon
         {
             const std::string command = normalize_command(read_command(client_fd));
 
+<<<<<<< HEAD
             if (command == "PING")
             {
                 send_response(client_fd, "PONG\n");
+=======
+            if (command == "PING" || command == "STATUS")
+            {
+                if (on_status_)
+                {
+                    send_response(client_fd, on_status_());
+                }
+                else
+                {
+                    send_response(client_fd, "PONG\n");
+                }
+>>>>>>> master
                 return;
             }
 

@@ -6,15 +6,34 @@
 #include "ahkunix/daemon/Daemonizer.hpp"
 #include "ahkunix/daemon/IpcServer.hpp"
 
+<<<<<<< HEAD
 #include <cerrno>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+=======
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <iostream>
+#include <mutex>
+>>>>>>> master
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
+<<<<<<< HEAD
+=======
+#include <vector>
+>>>>>>> master
 
 namespace
 {
@@ -35,7 +54,11 @@ namespace
     {
         std::cerr
             << "Usage:\n"
+<<<<<<< HEAD
             << "  " << argv0 << " [--device /dev/input/eventX] [--strict] [--foreground|--no-daemon] script.ahkl\n"
+=======
+            << "  " << argv0 << " [--device /dev/input/eventX] [--strict] [--foreground|--no-daemon] [script.ahkl]\n"
+>>>>>>> master
             << "\n"
             << "The daemon listens on /tmp/ahkunix.sock and logs to /tmp/ahkunix.log when daemonized.\n";
     }
@@ -100,11 +123,14 @@ namespace
             options.script = arg;
         }
 
+<<<<<<< HEAD
         if (options.script.empty())
         {
             throw std::runtime_error("script path required");
         }
 
+=======
+>>>>>>> master
         return options;
     }
 } // namespace
@@ -113,6 +139,7 @@ int main(int argc, char **argv)
 {
     try
     {
+<<<<<<< HEAD
         if (argc < 2)
         {
             print_usage(argv[0]);
@@ -122,12 +149,40 @@ int main(int argc, char **argv)
         auto options = parse_options(argc, argv);
         const auto layout = ahk::LayoutProfile::russian_qwerty();
         auto hotstrings = ahk::AhkParser::parse_file(options.script, layout, options.strict_mode);
+=======
+        auto options = parse_options(argc, argv);
+        const auto layout = ahk::LayoutProfile::russian_qwerty();
+        std::vector<ahk::Hotstring> hotstrings;
+        if (!options.script.empty())
+        {
+            hotstrings = ahk::AhkParser::parse_file(options.script, layout, options.strict_mode);
+        }
+>>>>>>> master
 
         if (options.device.empty())
         {
             options.device = ahk::autodetect_keyboard();
         }
 
+<<<<<<< HEAD
+=======
+        // ЗАЩИТА ОТ ДЕМЕНЦИИ: Проверяем, жив ли сокет от предыдущего демона
+        {
+            int check_fd = ::socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+            if (check_fd >= 0) {
+                sockaddr_un addr {};
+                addr.sun_family = AF_UNIX;
+                std::strncpy(addr.sun_path, "/tmp/ahkunix.sock", sizeof(addr.sun_path) - 1);
+                if (::connect(check_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
+                    std::cerr << "fatal: Daemon is already running (active socket found)\n";
+                    ::close(check_fd);
+                    return 1;
+                }
+                ::close(check_fd);
+            }
+        }
+
+>>>>>>> master
         ahkunix::daemon::Daemonizer daemonizer;
         daemonizer.install_signal_handlers();
         install_ahk_stop_handler(SIGINT);
@@ -140,13 +195,44 @@ int main(int argc, char **argv)
             ipc_server.stop();
         });
 
+<<<<<<< HEAD
+=======
+        std::mutex state_mutex;
+        std::string active_script = options.script.empty() ? "[IDLE - NO SCRIPT LOADED]" : options.script.string();
+        std::time_t load_time = std::time(nullptr);
+
+>>>>>>> master
         ipc_server.start(
             [&daemonizer] {
                 daemonizer.request_shutdown();
                 ahk::g_stop = 1;
             },
+<<<<<<< HEAD
             [&daemon, strict_mode = options.strict_mode](std::string path) {
                 daemon.reload_script(path, strict_mode);
+=======
+            [&](std::string path) {
+                daemon.reload_script(path, options.strict_mode);
+                std::lock_guard lock(state_mutex);
+                active_script = path;
+                load_time = std::time(nullptr);
+            },
+            [&]() -> std::string {
+                std::lock_guard lock(state_mutex);
+                std::string time_str = std::ctime(&load_time);
+                time_str.pop_back();
+
+                return "PONG\n"
+                       "════════════════════════════════════════\n"
+                       " 🟢 AHKUnix Daemon (v0.6.0)\n"
+                       "════════════════════════════════════════\n"
+                       " Script: " + active_script + "\n"
+                       " Loaded: " + time_str + "\n"
+                       " Device: " + options.device.string() + "\n"
+                       " PID:    " + std::to_string(::getpid()) + "\n"
+                       " Action: ahkunixctl load <path/to/script>\n"
+                       "════════════════════════════════════════\n";
+>>>>>>> master
             });
 
         std::cerr << "AHKUnix daemon started.\n";

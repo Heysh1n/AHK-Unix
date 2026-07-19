@@ -3,6 +3,10 @@
 #include "ahkunix/Errors.hpp"
 #include "ahkunix/StringUtil.hpp"
 #include "ahkunix/commands/ScriptParser.hpp"
+<<<<<<< HEAD
+=======
+#include "ahkunix/commands/IfCommand.hpp"
+>>>>>>> master
 
 #include <linux/input-event-codes.h>
 
@@ -252,6 +256,37 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
     std::vector<Hotstring> hotstrings;
     bool in_multiline_comment = false;
 
+<<<<<<< HEAD
+=======
+    auto global_context = std::make_shared<cmd::Context>();
+
+    // Stacked-trigger support: accumulate consecutive trigger lines
+    // that have no inline replacement, then clone the shared block
+    // (CommandList or replacement text) for each of them.
+    struct PendingTrigger
+    {
+        Hotstring hs;
+        std::size_t source_line; // 0-based index into raw_lines
+    };
+    std::vector<PendingTrigger> pending_triggers;
+
+    // Flush helper: takes an already-built "template" Hotstring that
+    // carries the replacement/commands, and clones it for every pending
+    // trigger, then clears the pending list.
+    auto flush_pending = [&](const Hotstring &tpl) {
+        for (auto &pt : pending_triggers)
+        {
+            Hotstring copy = pt.hs;
+            copy.replacement_utf8 = tpl.replacement_utf8;
+            copy.tail_keys        = tpl.tail_keys;
+            copy.commands         = tpl.commands;   // shared_ptr copies — cheap
+            copy.context          = global_context;
+            hotstrings.push_back(std::move(copy));
+        }
+        pending_triggers.clear();
+    };
+
+>>>>>>> master
     for (std::size_t i = 0; i < raw_lines.size(); ++i)
     {
         std::string line = trim(raw_lines[i]);
@@ -275,6 +310,28 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
             continue;
         }
 
+<<<<<<< HEAD
+=======
+        const auto eq_pos = line.find('=');
+        if (eq_pos != std::string::npos && line.find("::") == std::string::npos)
+        {
+            std::string name = trim(line.substr(0, eq_pos));
+            std::string value = trim(line.substr(eq_pos + 1));
+            
+            bool has_space = false;
+            for (char c : name) {
+                if (std::isspace(static_cast<unsigned char>(c))) {
+                    has_space = true;
+                    break;
+                }
+            }
+            if (!has_space && !name.empty()) {
+                global_context->set_variable_str(name, value);
+                continue;
+            }
+        }
+
+>>>>>>> master
         if (!looks_like_trigger_line(line))
         {
             continue;
@@ -290,14 +347,57 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
             throw std::runtime_error(path.string() + ":" + std::to_string(i + 1) + ": " + e.what());
         }
 
+<<<<<<< HEAD
         // If replacement was inline, we're done.
         if (!hs.replacement_utf8.empty() || !hs.tail_keys.empty())
         {
+=======
+        // If replacement was inline, flush any pending triggers first
+        // (they shouldn't share this inline replacement — they are
+        // orphaned stacked triggers with no body; treat them as empty),
+        // then emit the current trigger directly.
+        if (!hs.replacement_utf8.empty() || !hs.tail_keys.empty())
+        {
+            // Any pending triggers without a body are flushed as-is
+            // (empty replacement — harmless no-ops).
+            if (!pending_triggers.empty())
+            {
+                Hotstring empty_tpl;
+                flush_pending(empty_tpl);
+            }
+
+            hs.context = global_context;
+>>>>>>> master
             hotstrings.push_back(std::move(hs));
             continue;
         }
 
+<<<<<<< HEAD
         // Collect multiline block after trigger:: until Return or next trigger.
+=======
+        // No inline replacement — this trigger needs a multiline body.
+        // Add it to pending and keep scanning for more stacked triggers
+        // or the start of the body.
+        pending_triggers.push_back({std::move(hs), i});
+
+        // Peek ahead: is the very next meaningful line also a trigger?
+        // If so, let the outer for-loop pick it up on the next iteration.
+        {
+            std::size_t peek = i + 1;
+            while (peek < raw_lines.size() && is_comment_or_empty(trim(raw_lines[peek])))
+            {
+                ++peek;
+            }
+            if (peek < raw_lines.size() && looks_like_trigger_line(trim(raw_lines[peek])))
+            {
+                // Next line is another trigger — continue accumulating.
+                continue;
+            }
+        }
+
+        // Next line is NOT a trigger — collect the multiline block for
+        // all pending triggers.
+>>>>>>> master
         std::vector<std::string> block_lines;
         bool saw_return = false;
         int brace_depth = 0;
@@ -353,23 +453,47 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
             joined += block_lines[k];
         }
 
+<<<<<<< HEAD
+=======
+        // Build a template Hotstring that holds the shared body.
+        Hotstring tpl;
+>>>>>>> master
         try
         {
             if (as_action_block)
             {
+<<<<<<< HEAD
                 hs.commands = parse_action_block(joined, strict_mode, path.string() + ":" + std::to_string(i + 1));
             }
             else
             {
                 parse_replacement(joined, hs);
+=======
+                tpl.commands = parse_action_block(joined, strict_mode,
+                    path.string() + ":" + std::to_string(
+                        pending_triggers.front().source_line + 1));
+            }
+            else
+            {
+                parse_replacement(joined, tpl);
+>>>>>>> master
             }
         }
         catch (const std::exception &e)
         {
+<<<<<<< HEAD
             throw std::runtime_error(path.string() + ":" + std::to_string(i + 1) + ": " + e.what());
         }
 
         hotstrings.push_back(std::move(hs));
+=======
+            throw std::runtime_error(path.string() + ":" +
+                std::to_string(pending_triggers.front().source_line + 1) +
+                ": " + e.what());
+        }
+
+        flush_pending(tpl);
+>>>>>>> master
 
         if (saw_return)
         {
@@ -381,6 +505,16 @@ std::vector<Hotstring> AhkParser::parse_file(const std::filesystem::path &path, 
         }
     }
 
+<<<<<<< HEAD
+=======
+    // Flush any trailing pending triggers that were never followed by a body.
+    if (!pending_triggers.empty())
+    {
+        Hotstring empty_tpl;
+        flush_pending(empty_tpl);
+    }
+
+>>>>>>> master
     if (hotstrings.empty())
     {
         throw std::runtime_error("script has no supported hotstrings: " + path.string());
