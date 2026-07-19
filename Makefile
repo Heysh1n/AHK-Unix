@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-.PHONY: configure build test dev setup install-local deb package clean-artifacts clean-full run-example help
-=======
 .PHONY: configure build test dev setup install-local deb package clean-artifacts clean-full run-example help uninstall reinstall
->>>>>>> master
 
 BUILD_DIR ?= build
 SCRIPT ?= examples/ads.ahkl
@@ -19,11 +15,8 @@ help:
 	@echo "  make run-example    Run examples/ads.ahkl"
 	@echo "  make clean-artifacts Remove build and generated packages"
 	@echo "  make clean-full     Remove all generated/temp files for a fresh build"
-<<<<<<< HEAD
-=======
 	@echo "  make uninstall      Remove installed files from ~/.local"
 	@echo "  make reinstall      Nuke everything, build and install fresh"
->>>>>>> master
 
 configure:
 	cmake -S . -B $(BUILD_DIR)
@@ -59,8 +52,6 @@ run-example: build
 	else \
 		sudo --preserve-env=DISPLAY,WAYLAND_DISPLAY,XDG_RUNTIME_DIR,DBUS_SESSION_BUS_ADDRESS ./$(BUILD_DIR)/ahkunixd "$(SCRIPT)"; \
 	fi
-<<<<<<< HEAD
-=======
 
 uninstall:
 	@echo "Stopping daemon if running..."
@@ -73,4 +64,3 @@ uninstall:
 
 reinstall: uninstall clean-full install-local
 	@echo "Reinstall complete. Fresh build deployed."
->>>>>>> master

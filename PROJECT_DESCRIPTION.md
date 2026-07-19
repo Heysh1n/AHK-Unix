@@ -2,7 +2,7 @@
 
 ## Version
 
-0.5.7
+0.6.0
 
 ## Summary
 
@@ -184,7 +184,7 @@ tests/                    CLI smoke tests
 
 ## Status
 
-0.5.7 is the stable architecture baseline for:
+0.6.0 is the stable architecture baseline for:
 
 - responsive evdev polling during long macro execution
 - configurable script-level interruption through `Cancel`/`Pause`

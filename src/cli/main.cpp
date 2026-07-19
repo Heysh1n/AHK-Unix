@@ -28,10 +28,7 @@ namespace
         std::cerr
             << "Usage:\n"
             << "  " << argv0 << " ping\n"
-<<<<<<< HEAD
-=======
             << "  " << argv0 << " status\n"
->>>>>>> master
             << "  " << argv0 << " stop\n"
             << "  " << argv0 << " load script.ahkl\n"
             << "  " << argv0 << " lint [--strict] script.ahkl\n";
@@ -69,13 +66,6 @@ namespace
             if (bytes > 0)
             {
                 response.append(buffer, static_cast<std::size_t>(bytes));
-<<<<<<< HEAD
-                if (response.find('\n') != std::string::npos)
-                {
-                    break;
-                }
-=======
->>>>>>> master
                 continue;
             }
 
@@ -201,8 +191,6 @@ int main(int argc, char **argv)
             return send_daemon_command("PING\n");
         }
 
-<<<<<<< HEAD
-=======
         if (command == "status")
         {
             if (argc != 2)
@@ -213,7 +201,6 @@ int main(int argc, char **argv)
             return send_daemon_command("STATUS\n");
         }
 
->>>>>>> master
         if (command == "stop")
         {
             if (argc != 2)

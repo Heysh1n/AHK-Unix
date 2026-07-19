@@ -7,13 +7,10 @@
 #include <random>
 #include <regex>
 #include <stdexcept>
-<<<<<<< HEAD
-=======
 #include <iomanip>
 #include <limits>
 #include <sstream>
 #include <ctime>
->>>>>>> master
 
 namespace ahk::cmd
 {
@@ -37,8 +34,6 @@ namespace ahk::cmd
         return dist(gen);
     }
 
-<<<<<<< HEAD
-=======
     void Context::set_variable_str(const std::string &name, const std::string &value)
     {
         variables_str_[name] = value;
@@ -235,7 +230,6 @@ namespace ahk::cmd
         return result;
     }
 
->>>>>>> master
     IfCommand::IfCommand(std::string condition, CommandList true_branch, CommandList false_branch)
         : condition_(std::move(condition)),
           true_branch_(std::move(true_branch)),
@@ -263,8 +257,6 @@ namespace ahk::cmd
 
     bool IfCommand::evaluate_condition() const
     {
-<<<<<<< HEAD
-=======
         // Safe integer parser: clamps to int range instead of throwing
         // on overflow.  Returns 0 for completely unparseable strings.
         auto safe_stoi = [](const std::string &s) -> int {
@@ -278,7 +270,6 @@ namespace ahk::cmd
             }
         };
 
->>>>>>> master
         std::smatch match;
 
         // random(1,3) = 2
@@ -288,17 +279,10 @@ namespace ahk::cmd
 
         if (std::regex_match(condition_, match, random_pattern))
         {
-<<<<<<< HEAD
-            int min_val = std::stoi(match[1].str());
-            int max_val = std::stoi(match[2].str());
-            std::string op = match[3].str();
-            int cmp = std::stoi(match[4].str());
-=======
             int min_val = safe_stoi(match[1].str());
             int max_val = safe_stoi(match[2].str());
             std::string op = match[3].str();
             int cmp = safe_stoi(match[4].str());
->>>>>>> master
 
             if (min_val > max_val)
             {
@@ -324,11 +308,7 @@ namespace ahk::cmd
         {
             const std::string var_name = match[1].str();
             const std::string op = match[2].str();
-<<<<<<< HEAD
-            const int cmp = std::stoi(match[3].str());
-=======
             const int cmp = safe_stoi(match[3].str());
->>>>>>> master
 
             if (!context_)
             {

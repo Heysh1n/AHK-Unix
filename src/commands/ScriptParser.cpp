@@ -3,11 +3,9 @@
 #include "ahkunix/StringUtil.hpp"
 #include "ahkunix/commands/CancelCommand.hpp"
 #include "ahkunix/commands/IfCommand.hpp"
-<<<<<<< HEAD
-=======
 #include "ahkunix/commands/IncrementCommand.hpp"
->>>>>>> master
 #include "ahkunix/commands/SendInputCommand.hpp"
+#include "ahkunix/commands/ShowMarkdownCommand.hpp"
 #include "ahkunix/commands/SleepCommand.hpp"
 
 #include <algorithm>
@@ -141,6 +139,7 @@ namespace ahk::cmd
         std::string normalize_command_tokens(std::string line)
         {
             static const std::vector<std::string> commands = {
+                "showmarkdown",
                 "sendinput",
                 "sendmessage",
                 "random",
@@ -289,8 +288,20 @@ namespace ahk::cmd
             return std::make_shared<CancelCommand>();
         }
 
-<<<<<<< HEAD
-=======
+        if (starts_with_command(line, "showmarkdown"))
+        {
+            std::string args = trim(line.substr(12)); // strlen("showmarkdown") == 12
+            if (!args.empty() && args.front() == ',')
+            {
+                args = trim(args.substr(1));
+            }
+            if (args.empty())
+            {
+                throw std::runtime_error("ShowMarkdown requires a file path argument");
+            }
+            return std::make_shared<ShowMarkdownCommand>(args);
+        }
+
         {
             static const std::regex increment_re(
                 R"(^\s*([A-Za-z_]\w*)\+\+\s*$)");
@@ -301,7 +312,6 @@ namespace ahk::cmd
             }
         }
 
->>>>>>> master
         return nullptr;
     }
 

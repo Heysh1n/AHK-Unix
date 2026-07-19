@@ -2,10 +2,7 @@
 #include "ahkunix/Clipboard.hpp"
 #include "ahkunix/LayoutProfile.hpp"
 #include "ahkunix/UinputKeyboard.hpp"
-<<<<<<< HEAD
-=======
 #include "ahkunix/commands/IfCommand.hpp"
->>>>>>> master
 
 #include <algorithm>
 #include <atomic>
@@ -44,14 +41,11 @@ namespace ahk::cmd
         parse_sequence();
     }
 
-<<<<<<< HEAD
-=======
     void SendInputCommand::bind_context(const std::shared_ptr<Context> &ctx)
     {
         context_ = ctx;
     }
 
->>>>>>> master
     void SendInputCommand::parse_sequence()
     {
         auto append_text = [this](const std::string &s) {
@@ -154,12 +148,8 @@ namespace ahk::cmd
                 continue;
             }
 
-<<<<<<< HEAD
-            clipboard.paste_text_synchronously(part.text, injector);
-=======
             std::string final_text = context_ ? context_->interpolate(part.text) : part.text;
             clipboard.paste_text_synchronously(final_text, injector);
->>>>>>> master
         }
     }
 
@@ -177,12 +167,8 @@ namespace ahk::cmd
             }
             else if (!part.text.empty())
             {
-<<<<<<< HEAD
-                clipboard.paste_text_synchronously(part.text, injector);
-=======
                 std::string final_text = context_ ? context_->interpolate(part.text) : part.text;
                 clipboard.paste_text_synchronously(final_text, injector);
->>>>>>> master
             }
         }
     }

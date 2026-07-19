@@ -6,13 +6,10 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-<<<<<<< HEAD
-=======
 #include <chrono>
 #include <iomanip>
 #include <sstream>
 #include <ctime>
->>>>>>> master
 
 namespace ahk::cmd
 {
@@ -23,10 +20,6 @@ namespace ahk::cmd
         void set_variable(const std::string &name, int value);
         static int random_range(int min_val, int max_val);
 
-<<<<<<< HEAD
-    private:
-        std::unordered_map<std::string, int> variables_;
-=======
         void set_variable_str(const std::string &name, const std::string &value);
         std::string get_variable_str(const std::string &name) const;
         std::string interpolate(const std::string &input) const;
@@ -34,7 +27,6 @@ namespace ahk::cmd
     private:
         std::unordered_map<std::string, int> variables_;
         std::unordered_map<std::string, std::string> variables_str_;
->>>>>>> master
     };
 
     class IfCommand : public Command

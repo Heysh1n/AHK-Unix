@@ -4,7 +4,7 @@ NOT OFFICIAL AutoHotkey-style text expansion and hotkeys for Linux.
 
 AHKUnix reads physical keyboard input via the Linux input subsystem (`evdev`), parses triggers from `.ahkl` scripts, and injects text/keys into the active window using `uinput` + native clipboard backends. 
 
-With version **0.5.7**, it runs as a robust Client-Server architecture (Daemon + CLI Controller) strictly below the X11/Wayland display server layer, featuring multithreaded macro execution and a zero-race-condition synchronous clipboard pipeline.
+With version **0.6.0**, it runs as a robust Client-Server architecture (Daemon + CLI Controller) strictly below the X11/Wayland display server layer, featuring multithreaded macro execution and a zero-race-condition synchronous clipboard pipeline.
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](#)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -82,11 +82,7 @@ AHKUnix is split into two parts communicating via a Unix Domain Socket (`/tmp/ah
 
 ### Quick Setup
 ```bash
-<<<<<<< HEAD
-git clone [https://github.com/Heysh1n/AHKUnix.git](https://github.com/Heysh1n/AHKUnix.git)
-=======
 git clone https://github.com/Heysh1n/AHKUnix.git
->>>>>>> master
 cd AHKUnix
 make setup
 
@@ -108,7 +104,7 @@ sudo apt install ./*.deb
 ### 1. Create script (`my.ahkl`)
 
 ```ahk
-/* AHKUnix 0.5.7 Script
+/* AHKUnix 0.6.0 Script
     Demonstrating case-insensitivity and interrupts
 */
 :*?:hlo::Hello World!
